@@ -3,14 +3,13 @@ import axios from 'axios';
 import Image from 'next/image';
 import Link from 'next/link';
 
-function CommentSection({ articleId, api }) {
+function CommentSection({ articleId, api, currentUser, getAvatarColor }) {
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [replyTo, setReplyTo] = useState(null);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const currentUser = JSON.parse(localStorage.getItem('user'));
 
   const fetchComments = async () => {
     try {
@@ -18,7 +17,6 @@ function CommentSection({ articleId, api }) {
       const response = await api.get('comments/', { 
         params: { article: articleId } 
       });
-      // Sort comments by likes (top comments first)
       const sortedComments = response.data.sort((a, b) => b.likes - a.likes);
       setComments(sortedComments);
       setError('');
@@ -53,11 +51,9 @@ function CommentSection({ articleId, api }) {
       setError('');
     } catch (err) {
       console.error('Error posting comment:', err);
-      if (err.response?.status === 401) {
-        setError('Please login to post comments');
-      } else {
-        setError('Failed to post comment');
-      }
+      setError(err.response?.status === 401 
+        ? 'Please login to post comments' 
+        : 'Failed to post comment');
     } finally {
       setIsSubmitting(false);
     }
@@ -66,10 +62,22 @@ function CommentSection({ articleId, api }) {
   const handleLike = async (commentId) => {
     try {
       await api.post('like/', { comment_id: commentId });
-      fetchComments(); // Refresh comments to update like counts
+      fetchComments();
     } catch (err) {
       console.error('Error liking comment:', err);
       setError('Failed to like comment');
+    }
+  };
+
+  const handleDeleteComment = async (commentId) => {
+    if (!window.confirm('Are you sure you want to delete this comment?')) return;
+    
+    try {
+      await api.delete(`comments/${commentId}/`);
+      fetchComments();
+    } catch (err) {
+      console.error('Error deleting comment:', err);
+      setError('Failed to delete comment');
     }
   };
 
@@ -77,6 +85,32 @@ function CommentSection({ articleId, api }) {
     return currentUser && (
       currentUser.id === comment.user.id || 
       currentUser.is_staff
+    );
+  };
+
+  // User avatar component
+  const UserAvatar = ({ user, size = 40 }) => {
+    return (
+      <Link href={`/profile/${user.id}`} className="flex-shrink-0">
+        {user.profile?.profile_picture ? (
+          <Image
+            src={user.profile.profile_picture}
+            alt={user.username}
+            width={size}
+            height={size}
+            className="rounded-full"
+          />
+        ) : (
+          <div 
+            className={`rounded-full flex items-center justify-center ${getAvatarColor(user.id)}`}
+            style={{ width: size, height: size }}
+          >
+            <span className="text-white font-medium">
+              {user.username.charAt(0).toUpperCase()}
+            </span>
+          </div>
+        )}
+      </Link>
     );
   };
 
@@ -99,21 +133,37 @@ function CommentSection({ articleId, api }) {
               </button>
             </div>
           )}
-          <textarea
-            value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-            className="w-full p-4 border rounded-lg mb-3 min-h-[120px] focus:ring-2 focus:ring-blue-500"
-            placeholder={replyTo ? "Write your reply..." : "Share your thoughts..."}
-            required
-            disabled={isSubmitting}
-          />
-          <button
-            type="submit"
-            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
-            disabled={!newComment.trim() || isSubmitting}
-          >
-            {isSubmitting ? 'Posting...' : replyTo ? 'Post Reply' : 'Post Comment'}
-          </button>
+          <div className="flex gap-3">
+            <UserAvatar user={currentUser} size={40} />
+            <div className="flex-grow">
+              <textarea
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                className="w-full p-4 border rounded-lg mb-3 min-h-[120px] focus:ring-2 focus:ring-blue-500"
+                placeholder={replyTo ? "Write your reply..." : "Share your thoughts..."}
+                required
+                disabled={isSubmitting}
+              />
+              <div className="flex justify-between items-center">
+                <button
+                  type="submit"
+                  className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+                  disabled={!newComment.trim() || isSubmitting}
+                >
+                  {isSubmitting ? 'Posting...' : replyTo ? 'Post Reply' : 'Post Comment'}
+                </button>
+                {replyTo && (
+                  <button 
+                    type="button"
+                    onClick={() => setReplyTo(null)}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         </form>
       ) : (
         <div className="mb-6 p-4 bg-blue-50 rounded-lg text-blue-800">
@@ -127,28 +177,17 @@ function CommentSection({ articleId, api }) {
         <div className="flex justify-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
         </div>
+      ) : comments.length === 0 ? (
+        <div className="text-center py-8 text-gray-500">
+          No comments yet. Be the first to comment!
+        </div>
       ) : (
         <div className="space-y-6">
           {comments.map((comment) => (
             <div key={comment.id} className={`border-b pb-6 ${comment.parent ? 'ml-8 pl-4 border-l-2 border-gray-200' : ''}`}>
               <div className="flex items-start gap-3 mb-2">
-                <Link href={`/profile/${comment.user.id}`} className="flex-shrink-0">
-                  {comment.user.profile?.profile_picture ? (
-                    <Image
-                      src={comment.user.profile.profile_picture}
-                      alt={comment.user.username}
-                      width={40}
-                      height={40}
-                      className="rounded-full"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
-                      <span className="text-gray-500">
-                        {comment.user.username.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                  )}
-                </Link>
+                <UserAvatar user={comment.user} size={40} />
+                
                 <div className="flex-grow">
                   <div className="flex items-center gap-2">
                     <Link href={`/profile/${comment.user.id}`} className="font-semibold hover:underline">
@@ -163,19 +202,22 @@ function CommentSection({ articleId, api }) {
                       {new Date(comment.created_at).toLocaleString()}
                     </span>
                   </div>
+                  
                   <p className="text-gray-800 whitespace-pre-line mt-1">
                     {comment.content}
                   </p>
+                  
                   <div className="flex items-center gap-4 mt-2">
                     <button 
                       onClick={() => handleLike(comment.id)}
-                      className="flex items-center gap-1 text-gray-500 hover:text-blue-500"
+                      className={`flex items-center gap-1 ${comment.is_liked ? 'text-blue-500' : 'text-gray-500 hover:text-blue-500'}`}
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill={comment.is_liked ? "currentColor" : "none"} stroke="currentColor">
                         <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
                       </svg>
                       <span>{comment.likes || 0}</span>
                     </button>
+                    
                     {currentUser && (
                       <button 
                         onClick={() => setReplyTo(comment.id)}
@@ -184,24 +226,20 @@ function CommentSection({ articleId, api }) {
                         Reply
                       </button>
                     )}
+                    
                     {canModifyComment(comment) && (
                       <>
                         <button 
                           onClick={() => {
+                            setNewComment(`@${comment.user.username} ${comment.content}`);
                             setReplyTo(null);
-                            setNewComment(comment.content);
-                            // You'll need to implement edit functionality
                           }}
                           className="text-gray-500 hover:text-blue-500"
                         >
                           Edit
                         </button>
                         <button 
-                          onClick={() => {
-                            if (window.confirm('Delete this comment?')) {
-                              // Implement delete functionality
-                            }
-                          }}
+                          onClick={() => handleDeleteComment(comment.id)}
                           className="text-gray-500 hover:text-red-500"
                         >
                           Delete
@@ -218,23 +256,7 @@ function CommentSection({ articleId, api }) {
                   {comment.replies.map(reply => (
                     <div key={reply.id} className="ml-8 pl-4 border-l-2 border-gray-200">
                       <div className="flex items-start gap-3 mb-2">
-                        <Link href={`/profile/${reply.user.id}`} className="flex-shrink-0">
-                          {reply.user.profile?.profile_picture ? (
-                            <Image
-                              src={reply.user.profile.profile_picture}
-                              alt={reply.user.username}
-                              width={32}
-                              height={32}
-                              className="rounded-full"
-                            />
-                          ) : (
-                            <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
-                              <span className="text-xs text-gray-500">
-                                {reply.user.username.charAt(0).toUpperCase()}
-                              </span>
-                            </div>
-                          )}
-                        </Link>
+                        <UserAvatar user={reply.user} size={32} />
                         <div className="flex-grow">
                           <div className="flex items-center gap-2">
                             <Link href={`/profile/${reply.user.id}`} className="text-sm font-medium hover:underline">
@@ -250,9 +272,9 @@ function CommentSection({ articleId, api }) {
                           <div className="flex items-center gap-3 mt-1">
                             <button 
                               onClick={() => handleLike(reply.id)}
-                              className="flex items-center gap-1 text-xs text-gray-500 hover:text-blue-500"
+                              className={`flex items-center gap-1 text-xs ${reply.is_liked ? 'text-blue-500' : 'text-gray-500 hover:text-blue-500'}`}
                             >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill={reply.is_liked ? "currentColor" : "none"} stroke="currentColor">
                                 <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
                               </svg>
                               <span>{reply.likes || 0}</span>

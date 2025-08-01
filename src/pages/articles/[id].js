@@ -27,7 +27,6 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
     
-    // Only handle 401 errors for authenticated endpoints
     if (error.response?.status === 401 && 
         !originalRequest._retry &&
         !originalRequest.url.includes('token/')) {
@@ -68,6 +67,14 @@ const handleLogout = () => {
   window.location.href = '/login';
 };
 
+const getAvatarColor = (userId) => {
+  const colors = [
+    'bg-red-400', 'bg-blue-400', 'bg-green-400', 
+    'bg-yellow-400', 'bg-purple-400', 'bg-pink-400'
+  ];
+  return colors[userId % colors.length];
+};
+
 export default function ArticleDetail() {
   const [article, setArticle] = useState(null);
   const [error, setError] = useState('');
@@ -83,9 +90,8 @@ export default function ArticleDetail() {
       setCurrentUser(JSON.parse(storedUser));
     }
 
-    if (!router.isReady) return;
-    if (!id) {
-      setError('Invalid article ID');
+    if (!router.isReady || !id) {
+      if (!id) setError('Invalid article ID');
       setIsLoading(false);
       return;
     }
@@ -98,11 +104,9 @@ export default function ArticleDetail() {
         setError('');
       } catch (error) {
         console.error('Error fetching article:', error);
-        if (error.response?.status === 404) {
-          setError('Article not found');
-        } else {
-          setError('Failed to load article');
-        }
+        setError(error.response?.status === 404 
+          ? 'Article not found' 
+          : 'Failed to load article');
       } finally {
         setIsLoading(false);
       }
@@ -121,17 +125,48 @@ export default function ArticleDetail() {
       setIsLiking(true);
       await api.post('like/', { article_id: article.id });
       
-      // Optimistically update the UI
-      setArticle(prev => ({
-        ...prev,
-        likes: prev.likes + (prev.is_liked ? -1 : 1),
-        is_liked: !prev.is_liked
-      }));
+      // Update the article data after like action
+      const updatedArticle = await api.get(`articles/${id}/`);
+      setArticle(updatedArticle.data);
     } catch (err) {
       console.error('Error liking article:', err);
       setError('Failed to like article');
     } finally {
       setIsLiking(false);
+    }
+  };
+
+  const handleCommentUpdate = async (commentId, updatedContent) => {
+    try {
+      await api.put(`comments/${commentId}/`, { content: updatedContent });
+      const updatedArticle = await api.get(`articles/${id}/`);
+      setArticle(updatedArticle.data);
+      return true;
+    } catch (error) {
+      console.error('Error updating comment:', error);
+      if (error.response?.status === 403) {
+        setError('You are not authorized to edit this comment');
+      } else {
+        setError('Failed to update comment');
+      }
+      return false;
+    }
+  };
+
+  const handleCommentDelete = async (commentId) => {
+    try {
+      await api.delete(`comments/${commentId}/`);
+      const updatedArticle = await api.get(`articles/${id}/`);
+      setArticle(updatedArticle.data);
+      return true;
+    } catch (error) {
+      console.error('Error deleting comment:', error);
+      if (error.response?.status === 403) {
+        setError('You are not authorized to delete this comment');
+      } else {
+        setError('Failed to delete comment');
+      }
+      return false;
     }
   };
 
@@ -144,23 +179,13 @@ export default function ArticleDetail() {
   if (error) return <div className="container mx-auto p-4 text-red-500">{error}</div>;
   if (!article) return <div className="container mx-auto p-4">Article not found</div>;
 
-  // Generate random avatar color based on user ID or username
-  const getAvatarColor = (userId) => {
-    const colors = [
-      'bg-red-400', 'bg-blue-400', 'bg-green-400', 
-      'bg-yellow-400', 'bg-purple-400', 'bg-pink-400'
-    ];
-    const index = (userId || 0) % colors.length;
-    return colors[index];
-  };
-
   return (
     <div>
       <Navbar currentPage="articles" />
       <div className="container mx-auto p-4 max-w-4xl">
         <h1 className="text-3xl font-bold mb-4">{article.title}</h1>
         
-        {/* Article Header with Author Info */}
+        {/* Author Info */}
         <div className="flex items-center gap-3 mb-4">
           {article.author.profile?.profile_picture ? (
             <Image
@@ -200,6 +225,7 @@ export default function ArticleDetail() {
         <div className="flex items-center gap-4 mb-4 text-sm text-gray-500">
           <span>Category: {article.category.name}</span>
           <span>Views: {article.views}</span>
+          <span>Likes: {article.likes}</span>
         </div>
 
         {/* Like Button */}
@@ -223,7 +249,13 @@ export default function ArticleDetail() {
             >
               <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
             </svg>
-            <span>{article.likes} Like{article.likes !== 1 ? 's' : ''}</span>
+            <span>{article.is_liked ? 'Unlike' : 'Like'}</span>
+            {isLiking && (
+              <svg className="animate-spin ml-1 h-4 w-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            )}
           </button>
         </div>
 
@@ -234,9 +266,9 @@ export default function ArticleDetail() {
           articleId={article.id} 
           api={api} 
           currentUser={currentUser} 
-          onCommentUpdate={() => {
-            api.get(`articles/${id}/`).then(response => setArticle(response.data));
-          }}
+          onCommentUpdate={handleCommentUpdate}
+          onCommentDelete={handleCommentDelete}
+          getAvatarColor={getAvatarColor}
         />
       </div>
     </div>
