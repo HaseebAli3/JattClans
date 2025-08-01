@@ -21,7 +21,7 @@ export default function Navbar({ currentPage }) {
   const handleLogout = () => {
     localStorage.removeItem('user');
     setUser(null);
-    router.push('/');
+    
   };
 
   return (

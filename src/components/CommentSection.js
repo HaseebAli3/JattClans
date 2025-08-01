@@ -142,7 +142,7 @@ const CommentSection = ({ articleId, api, currentUser, getAvatarColor }) => {
         })
       );
 
-      await api.post('likes/', { comment_id: commentId });
+      await api.post('like/', { comment_id: commentId });
     } catch (err) {
       console.error('Failed to like comment:', err);
       setError(err.response?.status === 401 
