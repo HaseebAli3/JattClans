@@ -35,62 +35,117 @@ export default function ProfilePage() {
       setCurrentUser(JSON.parse(storedUser));
     }
 
-    if (!id) return;
+    // Check if id is null, not numeric, or negative
+    if (!id || isNaN(id) || parseInt(id) <= 0) {
+      setError('Invalid profile ID. Redirecting to articles page.');
+      setLoading(false);
+      setTimeout(() => router.push('/articles'), 2000);
+      return;
+    }
 
-    const fetchProfile = async () => {
+    const fetchProfileData = async () => {
       try {
         setLoading(true);
-        const response = await api.get(`profile/${id}/`);
-        setProfile(response.data);
+        // Fetch profile data
+        const profileResponse = await api.get(`profile/${id}/`);
+        setProfile(profileResponse.data);
+
+        // Fetch user's comments
+        const commentsRes = await api.get(`comments/?user=${id}&expand=article`);
         
-        // Fetch user's articles and comments
-        const [articlesRes, commentsRes] = await Promise.all([
-          api.get(`articles/?author=${id}`),
-          api.get(`comments/?user=${id}&expand=article`)
-        ]);
-        
-        setArticles(articlesRes.data.results || []);
-        setComments(commentsRes.data.results || []);
+        // Handle comments response
+        const commentsData = Array.isArray(commentsRes.data) 
+          ? commentsRes.data 
+          : commentsRes.data.results || [];
+        setComments(commentsData);
+
+        // Fetch articles where user commented
+        const articleIds = [...new Set(
+          commentsData
+            .filter(comment => comment.article && comment.article.id)
+            .map(comment => comment.article.id)
+        )];
+
+        const articlesPromises = articleIds.map(articleId => 
+          api.get(`articles/${articleId}/`)
+        );
+        const articlesResponses = await Promise.all(articlesPromises);
+        setArticles(articlesResponses.map(res => res.data));
+
         setError('');
       } catch (err) {
-        console.error('Error fetching profile:', err);
-        setError('Failed to load profile');
+        console.error('Error fetching profile data:', err);
+        if (err.response) {
+          switch (err.response.status) {
+            case 404:
+              setError('Profile not found. The user may have been deleted or does not exist.');
+              break;
+            case 401:
+              setError('Authentication failed. Please log in again.');
+              localStorage.removeItem('access_token');
+              router.push('/login');
+              break;
+            case 403:
+              setError('You do not have permission to view this profile.');
+              break;
+            case 500:
+              setError('Server error. Please try again later or contact support.');
+              break;
+            default:
+              setError(`Failed to load profile data: ${err.response.data?.detail || err.message}`);
+          }
+        } else if (err.request) {
+          setError('Network error. Please check your internet connection and try again.');
+        } else {
+          setError(`An unexpected error occurred: ${err.message}`);
+        }
       } finally {
         setLoading(false);
       }
     };
 
-    fetchProfile();
-  }, [id]);
-
-  const handleDeleteComment = async (commentId) => {
-    if (!window.confirm('Are you sure you want to delete this comment?')) return;
-    
-    try {
-      await api.delete(`comments/${commentId}/`);
-      setComments(comments.filter(c => c.id !== commentId));
-      setSuccess('Comment deleted successfully');
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (err) {
-      console.error('Error deleting comment:', err);
-      setError('Failed to delete comment');
-    }
-  };
+    fetchProfileData();
+  }, [id, router]);
 
   const handleSuspendUser = async () => {
     const action = profile.is_active ? 'suspend' : 'activate';
     if (!window.confirm(`Are you sure you want to ${action} ${profile.username}'s account?`)) return;
     
     try {
-      await api.post(`suspend-user/${id}/`);
+      const suspendResponse = await api.post(`suspend-user/${id}/`);
+      console.log('Suspend response:', suspendResponse.data);
       setSuccess(`User account ${action}ed successfully`);
-      setTimeout(() => setSuccess(''), 3000);
-      // Refresh profile to show updated status
-      const response = await api.get(`profile/${id}/`);
-      setProfile(response.data);
+      setTimeout(() => {
+        setSuccess('');
+        router.push('/articles');
+      }, 2000);
     } catch (err) {
       console.error(`Error ${action}ing user:`, err);
-      setError(`Failed to ${action} user account`);
+      if (err.response) {
+        switch (err.response.status) {
+          case 404:
+            setError('User not found. The account may have been deleted.');
+            setTimeout(() => router.push('/articles'), 2000);
+            break;
+          case 401:
+            setError('Authentication failed. Please log in again.');
+            localStorage.removeItem('access_token');
+            router.push('/login');
+            break;
+          case 403:
+            setError('You do not have permission to perform this action.');
+            break;
+          case 500:
+            setError('Server error. Please try again later or contact support.');
+            break;
+          default:
+            setError(`Failed to ${action} user account: ${err.response.data?.error || err.message}`);
+        }
+      } else if (err.request) {
+        setError('Network error. Please check your internet connection and try again.');
+      } else {
+        setError(`An unexpected error occurred: ${err.message}`);
+      }
     }
   };
 
@@ -115,20 +170,22 @@ export default function ProfilePage() {
   );
 
   const isAdmin = currentUser?.is_staff;
-  const isOwnProfile = currentUser?.id === profile.id;
+  const isOwnProfile = currentUser?.id === parseInt(id);
   const hasProfilePicture = profile.profile?.profile_picture;
+  const isSuspended = !profile.is_active;
 
   return (
     <div>
       <Navbar />
       <div className="container mx-auto p-4 max-w-6xl">
+        {/* Success Messages */}
         {success && (
           <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-lg">
             {success}
           </div>
         )}
 
-        {/* Profile Header */}
+        {/* Profile Header Section */}
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <div className="flex flex-col md:flex-row gap-6 items-center">
             {/* Avatar Section */}
@@ -151,7 +208,7 @@ export default function ProfilePage() {
               )}
             </div>
 
-            {/* Profile Info */}
+            {/* Profile Info Section */}
             <div className="flex-grow w-full">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
@@ -162,57 +219,51 @@ export default function ProfilePage() {
                         Admin
                       </span>
                     )}
-                    {!profile.is_active && (
-                      <span className="inline-block bg-red-500 text-white text-xs px-2 py-1 rounded">
-                        Suspended
-                      </span>
+                    {isSuspended && (
+                      <span className="inline-block bg-green-500 text-white text-xs px-2 py-1 rounded">
+  Active
+</span>
+
                     )}
                   </div>
                 </div>
 
-                {/* Admin Controls */}
+                {/* Admin Controls - Only for admins viewing other profiles */}
                 {isAdmin && !isOwnProfile && (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleSuspendUser}
-                      className={`px-4 py-2 rounded-md text-white text-sm font-medium ${
-                        profile.is_active 
-                          ? 'bg-red-500 hover:bg-red-600' 
-                          : 'bg-green-500 hover:bg-green-600'
-                      } transition-colors`}
-                    >
-                      {profile.is_active ? 'Suspend Account' : 'Activate Account'}
-                    </button>
-                  </div>
+                  <button
+                    onClick={handleSuspendUser}
+                    className={`px-4 py-2 rounded-md text-white text-sm font-medium ${
+                      profile.is_active 
+                        ? 'bg-red-500 hover:bg-red-600' 
+                        : 'bg-green-500 hover:bg-green-600'
+                    } transition-colors`}
+                  >
+                    {profile.is_active ? 'Suspend Account' : 'Activate Account'}
+                  </button>
                 )}
               </div>
 
               <p className="text-gray-600 mt-2">{profile.email}</p>
-              <p className="text-gray-700 mt-3">
-                {profile.profile?.bio || 'This user has not written a bio yet.'}
-              </p>
+              
+              {/* Bio Section */}
+              <div className="mt-4">
+                <h3 className="text-sm font-medium text-gray-500">About</h3>
+                <p className="text-gray-700 mt-1 whitespace-pre-line">
+                  {profile.profile?.bio || 'This user has not written a bio yet.'}
+                </p>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* User Content */}
+        {/* User Content Section */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Articles Section */}
           <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">Articles ({articles.length})</h2>
-              {isOwnProfile && (
-                <Link 
-                  href="/articles/new" 
-                  className="text-sm bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600"
-                >
-                  New Article
-                </Link>
-              )}
-            </div>
+            <h2 className="text-xl font-bold mb-4">Related Articles ({articles.length})</h2>
             
             {articles.length === 0 ? (
-              <p className="text-gray-500">No articles published yet</p>
+              <p className="text-gray-500">No related articles found</p>
             ) : (
               <div className="space-y-4">
                 {articles.map(article => (
@@ -229,7 +280,7 @@ export default function ProfilePage() {
                         <span>•</span>
                         <span>{article.views} views</span>
                         <span>•</span>
-                        <span>{article.comments_count} comments</span>
+                        <span>{article.likes} likes</span>
                       </div>
                     </Link>
                   </div>
@@ -251,23 +302,24 @@ export default function ProfilePage() {
                     key={comment.id} 
                     className="border-b pb-4 last:border-b-0 group relative hover:bg-gray-50 p-2 rounded transition-colors"
                   >
-                    {/* Comment Content */}
                     <div className="flex gap-3">
                       <Link 
                         href={`/profile/${comment.user.id}`}
                         className="flex-shrink-0"
                       >
                         {comment.user.profile?.profile_picture ? (
-                          <Image
-                            src={comment.user.profile.profile_picture}
-                            alt={comment.user.username}
-                            width={40}
-                            height={40}
-                            className="rounded-full"
-                          />
+                          <div className="w-10 h-10 rounded-full overflow-hidden">
+                            <Image
+                              src={comment.user.profile.profile_picture}
+                              alt={comment.user.username}
+                              width={40}
+                              height={40}
+                              className="object-cover"
+                            />
+                          </div>
                         ) : (
                           <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
-                            <span className="text-gray-500">
+                            <span className="text-gray-500 font-medium">
                               {comment.user.username.charAt(0).toUpperCase()}
                             </span>
                           </div>
@@ -293,7 +345,7 @@ export default function ProfilePage() {
                         
                         <div className="mt-2 flex items-center gap-4 text-sm">
                           <Link 
-                            href={`/articles/${comment.article.id}`}
+                            href={`/articles/${comment.article?.id || '#'}`}
                             className="text-blue-500 hover:underline flex items-center gap-1"
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -311,21 +363,6 @@ export default function ProfilePage() {
                         </div>
                       </div>
                     </div>
-
-                    {/* Action Buttons (owner or admin) */}
-                    {(isOwnProfile || isAdmin) && (
-                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
-                        <button
-                          onClick={() => handleDeleteComment(comment.id)}
-                          className="p-1 text-red-500 hover:text-red-700"
-                          title="Delete comment"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                          </svg>
-                        </button>
-                      </div>
-                    )}
                   </div>
                 ))}
               </div>

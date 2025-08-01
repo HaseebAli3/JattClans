@@ -260,7 +260,7 @@ export default function ArticleDetail() {
         </div>
 
         <div className="prose max-w-none mb-8" dangerouslySetInnerHTML={{ __html: article.content }} />
-        
+        console.log(article.id)
         {/* Comment Section */}
         <CommentSection 
           articleId={article.id} 
