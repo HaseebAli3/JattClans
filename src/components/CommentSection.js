@@ -10,6 +10,7 @@ function CommentSection({ articleId, api, currentUser, getAvatarColor }) {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [expandedReplies, setExpandedReplies] = useState({});
 
   const fetchComments = async () => {
     try {
@@ -17,7 +18,17 @@ function CommentSection({ articleId, api, currentUser, getAvatarColor }) {
       const response = await api.get('comments/', { 
         params: { article: articleId } 
       });
-      const sortedComments = response.data.sort((a, b) => b.likes - a.likes);
+      // Sort comments by date (newest first) and replies stay with their parents
+      const sortedComments = response.data
+        .filter(comment => !comment.parent) // Get only parent comments
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+        .map(parent => ({
+          ...parent,
+          replies: response.data
+            .filter(comment => comment.parent === parent.id)
+            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+        }));
+      
       setComments(sortedComments);
       setError('');
     } catch (err) {
@@ -44,11 +55,11 @@ function CommentSection({ articleId, api, currentUser, getAvatarColor }) {
         parent: replyTo
       };
       
-      const response = await api.post('comments/create/', commentData);
-      setComments([response.data, ...comments]);
+      await api.post('comments/create/', commentData);
       setNewComment('');
       setReplyTo(null);
       setError('');
+      fetchComments(); // Refresh comments after submission
     } catch (err) {
       console.error('Error posting comment:', err);
       setError(err.response?.status === 401 
@@ -62,7 +73,7 @@ function CommentSection({ articleId, api, currentUser, getAvatarColor }) {
   const handleLike = async (commentId) => {
     try {
       await api.post('like/', { comment_id: commentId });
-      fetchComments();
+      fetchComments(); // Refresh comments after like
     } catch (err) {
       console.error('Error liking comment:', err);
       setError('Failed to like comment');
@@ -74,7 +85,7 @@ function CommentSection({ articleId, api, currentUser, getAvatarColor }) {
     
     try {
       await api.delete(`comments/${commentId}/`);
-      fetchComments();
+      fetchComments(); // Refresh comments after deletion
     } catch (err) {
       console.error('Error deleting comment:', err);
       setError('Failed to delete comment');
@@ -88,51 +99,91 @@ function CommentSection({ articleId, api, currentUser, getAvatarColor }) {
     );
   };
 
-  // User avatar component
+  const toggleReplies = (commentId) => {
+    setExpandedReplies(prev => ({
+      ...prev,
+      [commentId]: !prev[commentId]
+    }));
+  };
+
+  // User avatar component with circular design
   const UserAvatar = ({ user, size = 40 }) => {
     return (
       <Link href={`/profile/${user.id}`} className="flex-shrink-0">
         {user.profile?.profile_picture ? (
-          <Image
-            src={user.profile.profile_picture}
-            alt={user.username}
-            width={size}
-            height={size}
-            className="rounded-full"
-          />
+          <div className="rounded-full overflow-hidden" style={{ width: size, height: size }}>
+            <Image
+              src={user.profile.profile_picture}
+              alt={user.username}
+              width={size}
+              height={size}
+              className="object-cover"
+            />
+          </div>
         ) : (
           <div 
             className={`rounded-full flex items-center justify-center ${getAvatarColor(user.id)}`}
-            style={{ width: size, height: size }}
+            style={{ 
+              width: size, 
+              height: size,
+              fontSize: size * 0.5,
+              fontWeight: 'bold',
+              color: 'white'
+            }}
           >
-            <span className="text-white font-medium">
-              {user.username.charAt(0).toUpperCase()}
-            </span>
+            {user.username.charAt(0).toUpperCase()}
           </div>
         )}
       </Link>
     );
   };
 
-  return (
-    <div className="mt-8 border-t pt-8">
-      <h2 className="text-2xl font-bold mb-6">Comments ({comments.length})</h2>
-      
-      {/* Comment form */}
-      {currentUser ? (
-        <form onSubmit={handleSubmit} className="mb-8">
-          {replyTo && (
-            <div className="mb-2 p-2 bg-blue-50 rounded-lg">
-              <p className="text-sm text-blue-700">Replying to comment</p>
-              <button 
-                type="button" 
-                onClick={() => setReplyTo(null)}
-                className="text-xs text-blue-500 hover:text-blue-700"
+  // Render reply form below a specific comment
+  const renderReplyForm = (commentId) => {
+    if (replyTo !== commentId || !currentUser) return null;
+
+    return (
+      <form onSubmit={handleSubmit} className="mt-4 ml-8 pl-4 border-l-2 border-gray-200">
+        <div className="flex gap-3">
+          <UserAvatar user={currentUser} size={32} />
+          <div className="flex-grow">
+            <textarea
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              className="w-full p-3 border rounded-lg mb-2 min-h-[80px] focus:ring-2 focus:ring-blue-500"
+              placeholder="Write your reply..."
+              required
+              disabled={isSubmitting}
+            />
+            <div className="flex justify-between items-center">
+              <button
+                type="submit"
+                className="bg-blue-600 text-white px-4 py-1.5 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 text-sm"
+                disabled={!newComment.trim() || isSubmitting}
               >
-                Cancel reply
+                {isSubmitting ? 'Posting...' : 'Post Reply'}
+              </button>
+              <button 
+                type="button"
+                onClick={() => setReplyTo(null)}
+                className="text-gray-500 hover:text-gray-700 text-sm"
+              >
+                Cancel
               </button>
             </div>
-          )}
+          </div>
+        </div>
+      </form>
+    );
+  };
+
+  return (
+    <div className="mt-8 border-t pt-8">
+      <h2 className="text-2xl font-bold mb-6">Comments ({comments.reduce((acc, comment) => acc + 1 + (comment.replies?.length || 0), 0)})</h2>
+      
+      {/* Main comment form */}
+      {currentUser && !replyTo && (
+        <form onSubmit={handleSubmit} className="mb-8">
           <div className="flex gap-3">
             <UserAvatar user={currentUser} size={40} />
             <div className="flex-grow">
@@ -140,32 +191,23 @@ function CommentSection({ articleId, api, currentUser, getAvatarColor }) {
                 value={newComment}
                 onChange={(e) => setNewComment(e.target.value)}
                 className="w-full p-4 border rounded-lg mb-3 min-h-[120px] focus:ring-2 focus:ring-blue-500"
-                placeholder={replyTo ? "Write your reply..." : "Share your thoughts..."}
+                placeholder="Share your thoughts..."
                 required
                 disabled={isSubmitting}
               />
-              <div className="flex justify-between items-center">
-                <button
-                  type="submit"
-                  className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
-                  disabled={!newComment.trim() || isSubmitting}
-                >
-                  {isSubmitting ? 'Posting...' : replyTo ? 'Post Reply' : 'Post Comment'}
-                </button>
-                {replyTo && (
-                  <button 
-                    type="button"
-                    onClick={() => setReplyTo(null)}
-                    className="text-gray-500 hover:text-gray-700"
-                  >
-                    Cancel
-                  </button>
-                )}
-              </div>
+              <button
+                type="submit"
+                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+                disabled={!newComment.trim() || isSubmitting}
+              >
+                {isSubmitting ? 'Posting...' : 'Post Comment'}
+              </button>
             </div>
           </div>
         </form>
-      ) : (
+      )}
+
+      {!currentUser && (
         <div className="mb-6 p-4 bg-blue-50 rounded-lg text-blue-800">
           Please <Link href="/login" className="text-blue-600 hover:underline">login</Link> to post comments
         </div>
@@ -184,7 +226,7 @@ function CommentSection({ articleId, api, currentUser, getAvatarColor }) {
       ) : (
         <div className="space-y-6">
           {comments.map((comment) => (
-            <div key={comment.id} className={`border-b pb-6 ${comment.parent ? 'ml-8 pl-4 border-l-2 border-gray-200' : ''}`}>
+            <div key={comment.id} className="border-b pb-6">
               <div className="flex items-start gap-3 mb-2">
                 <UserAvatar user={comment.user} size={40} />
                 
@@ -231,7 +273,7 @@ function CommentSection({ articleId, api, currentUser, getAvatarColor }) {
                       <>
                         <button 
                           onClick={() => {
-                            setNewComment(`@${comment.user.username} ${comment.content}`);
+                            setNewComment(comment.content);
                             setReplyTo(null);
                           }}
                           className="text-gray-500 hover:text-blue-500"
@@ -250,40 +292,100 @@ function CommentSection({ articleId, api, currentUser, getAvatarColor }) {
                 </div>
               </div>
 
-              {/* Replies */}
-              {comment.replies && comment.replies.length > 0 && (
-                <div className="mt-4 space-y-4">
-                  {comment.replies.map(reply => (
-                    <div key={reply.id} className="ml-8 pl-4 border-l-2 border-gray-200">
-                      <div className="flex items-start gap-3 mb-2">
-                        <UserAvatar user={reply.user} size={32} />
-                        <div className="flex-grow">
-                          <div className="flex items-center gap-2">
-                            <Link href={`/profile/${reply.user.id}`} className="text-sm font-medium hover:underline">
-                              {reply.user.username}
-                            </Link>
-                            <span className="text-xs text-gray-400">
-                              {new Date(reply.created_at).toLocaleString()}
-                            </span>
-                          </div>
-                          <p className="text-sm text-gray-700 whitespace-pre-line mt-1">
-                            {reply.content}
-                          </p>
-                          <div className="flex items-center gap-3 mt-1">
-                            <button 
-                              onClick={() => handleLike(reply.id)}
-                              className={`flex items-center gap-1 text-xs ${reply.is_liked ? 'text-blue-500' : 'text-gray-500 hover:text-blue-500'}`}
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill={reply.is_liked ? "currentColor" : "none"} stroke="currentColor">
-                                <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
-                              </svg>
-                              <span>{reply.likes || 0}</span>
-                            </button>
+              {/* Render reply form directly below this comment if it's being replied to */}
+              {renderReplyForm(comment.id)}
+
+              {/* Replies section */}
+              {comment.replies?.length > 0 && (
+                <div className="mt-4">
+                  {!expandedReplies[comment.id] && comment.replies.length > 3 && (
+                    <button 
+                      onClick={() => toggleReplies(comment.id)}
+                      className="text-sm text-blue-500 hover:underline mb-2"
+                    >
+                      View all {comment.replies.length} replies
+                    </button>
+                  )}
+                  
+                  <div className={`space-y-4 ${!expandedReplies[comment.id] && comment.replies.length > 3 ? 'hidden' : ''}`}>
+                    {comment.replies.map(reply => (
+                      <div key={reply.id} className="ml-8 pl-4 border-l-2 border-gray-200">
+                        <div className="flex items-start gap-3 mb-2">
+                          <UserAvatar user={reply.user} size={32} />
+                          <div className="flex-grow">
+                            <div className="flex items-center gap-2">
+                              <Link href={`/profile/${reply.user.id}`} className="text-sm font-medium hover:underline">
+                                {reply.user.username}
+                              </Link>
+                              {reply.user.is_staff && (
+                                <span className="text-xs bg-blue-500 text-white px-1 py-0.5 rounded">
+                                  Admin
+                                </span>
+                              )}
+                              <span className="text-xs text-gray-400">
+                                {new Date(reply.created_at).toLocaleString()}
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-700 whitespace-pre-line mt-1">
+                              {reply.content}
+                            </p>
+                            <div className="flex items-center gap-3 mt-1">
+                              <button 
+                                onClick={() => handleLike(reply.id)}
+                                className={`flex items-center gap-1 text-xs ${reply.is_liked ? 'text-blue-500' : 'text-gray-500 hover:text-blue-500'}`}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill={reply.is_liked ? "currentColor" : "none"} stroke="currentColor">
+                                  <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
+                                </svg>
+                                <span>{reply.likes || 0}</span>
+                              </button>
+                              
+                              {currentUser && (
+                                <button 
+                                  onClick={() => setReplyTo(reply.id)}
+                                  className="text-xs text-gray-500 hover:text-blue-500"
+                                >
+                                  Reply
+                                </button>
+                              )}
+                              
+                              {canModifyComment(reply) && (
+                                <>
+                                  <button 
+                                    onClick={() => {
+                                      setNewComment(reply.content);
+                                      setReplyTo(null);
+                                    }}
+                                    className="text-xs text-gray-500 hover:text-blue-500"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button 
+                                    onClick={() => handleDeleteComment(reply.id)}
+                                    className="text-xs text-gray-500 hover:text-red-500"
+                                  >
+                                    Delete
+                                  </button>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
+
+                        {/* Render reply form directly below this reply if it's being replied to */}
+                        {renderReplyForm(reply.id)}
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                  
+                  {expandedReplies[comment.id] && comment.replies.length > 3 && (
+                    <button 
+                      onClick={() => toggleReplies(comment.id)}
+                      className="text-sm text-blue-500 hover:underline mt-2"
+                    >
+                      Hide replies
+                    </button>
+                  )}
                 </div>
               )}
             </div>
