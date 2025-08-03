@@ -45,8 +45,7 @@ export default function Login() {
       <Head>
         <title>جٹ کلینز - Login</title>
         <link rel="icon" href="/jutt-icon.png" />
-        <link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu&display=swap" rel="stylesheet" />
-      </Head>
+       </Head>
 
       <div className="min-h-screen bg-gradient-to-br from-teal-100 to-coral-100 flex items-center justify-center p-4">
         <div className="w-full max-w-md bg-white rounded-lg shadow-md overflow-hidden border border-teal-200 transition-all duration-300 hover:shadow-lg">

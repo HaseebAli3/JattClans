@@ -70,8 +70,7 @@ export default function Signup() {
       <Head>
         <title>جٹ کلینز - Sign Up</title>
         <link rel="icon" href="/jutt-icon.png" />
-        <link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu&display=swap" rel="stylesheet" />
-      </Head>
+       </Head>
 
       <style jsx global>{`
         body {

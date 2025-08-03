@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import Image from 'next/image';
 import { useRouter } from 'next/router';
@@ -24,14 +24,48 @@ export default function Profile() {
   const fileInputRef = useRef(null);
   const router = useRouter();
 
-  // Configure axios interceptors
-  api.interceptors.request.use((config) => {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+  // Configure axios interceptors with cleanup
+  useEffect(() => {
+    const requestInterceptor = api.interceptors.request.use((config) => {
+      const token = localStorage.getItem('access_token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    });
+
+    return () => {
+      api.interceptors.request.eject(requestInterceptor);
+    };
+  }, []);
+
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user');
+    router.push('/login');
+  }, [router]);
+
+  const handleError = useCallback((error) => {
+    if (error.response?.status === 401) {
+      setError('Your session has expired. Please log in again.');
+      handleLogout();
+    } else {
+      setError(error.response?.data?.detail || 'An error occurred. Please try again.');
     }
-    return config;
-  });
+  }, [handleLogout]);
+
+  const fetchUserComments = useCallback(async (userId) => {
+    try {
+      setIsLoadingComments(true);
+      const response = await api.get(`comments/?user=${userId}`);
+      setUserComments(response.data);
+    } catch (error) {
+      console.error('Failed to fetch comments:', error);
+    } finally {
+      setIsLoadingComments(false);
+    }
+  }, []);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -53,9 +87,8 @@ export default function Profile() {
         setForm({ bio: updatedUser.profile?.bio || '' });
         localStorage.setItem('user', JSON.stringify(updatedUser));
         
-        // Fetch user comments after profile is loaded
         if (updatedUser.id) {
-          fetchUserComments(updatedUser.id);
+          await fetchUserComments(updatedUser.id);
         }
       } catch (error) {
         handleError(error);
@@ -65,63 +98,33 @@ export default function Profile() {
     };
 
     fetchProfile();
-  }, []);
-
-  const fetchUserComments = async (userId) => {
-    try {
-      setIsLoadingComments(true);
-      const response = await api.get(`comments/?user=${userId}`);
-      setUserComments(response.data);
-    } catch (error) {
-      console.error('Failed to fetch comments:', error);
-    } finally {
-      setIsLoadingComments(false);
-    }
-  };
+  }, [router, fetchUserComments, handleError]);
 
   useEffect(() => {
-    // Check for changes whenever form or previewImage updates
     if (user) {
       const bioChanged = form.bio !== (user.profile?.bio || '');
       const imageChanged = previewImage !== null || 
         (fileInputRef.current?.files?.length > 0 && !user.profile?.profile_picture);
-      
       setHasChanges(bioChanged || imageChanged);
     }
   }, [form, previewImage, user]);
 
-  const handleError = (error) => {
-    if (error.response?.status === 401) {
-      setError('Your session has expired. Please log in again.');
-      handleLogout();
-    } else {
-      setError(error.response?.data?.detail || 'An error occurred. Please try again.');
-    }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user');
-    router.push('/login');
-  };
-
-  const handleFileChange = (e) => {
+  const handleFileChange = useCallback((e) => {
     const file = e.target.files[0];
     if (file) {
       setPreviewImage(URL.createObjectURL(file));
     }
-  };
+  }, []);
 
-  const handleRemovePhoto = () => {
+  const handleRemovePhoto = useCallback(() => {
     setPreviewImage(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
     setHasChanges(true);
-  };
+  }, []);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     if (!user || !hasChanges) return;
 
@@ -163,19 +166,23 @@ export default function Profile() {
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [form.bio, hasChanges, previewImage, user, handleError]);
 
-  if (isLoading) return (
-    <div className="flex justify-center items-center h-screen bg-gradient-to-br from-teal-50 to-coral-50">
-      <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-teal-600"></div>
-    </div>
-  );
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-screen bg-gradient-to-br from-teal-50 to-coral-50">
+        <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-teal-600"></div>
+      </div>
+    );
+  }
 
-  if (!user) return (
-    <div className="container mx-auto px-4 py-12 bg-gradient-to-br from-teal-50 to-coral-50">
-      <p className="text-teal-800 text-center text-sm">Redirecting to login...</p>
-    </div>
-  );
+  if (!user) {
+    return (
+      <div className="container mx-auto px-4 py-12 bg-gradient-to-br from-teal-50 to-coral-50">
+        <p className="text-teal-800 text-center text-sm">Redirecting to login...</p>
+      </div>
+    );
+  }
 
   return (
     <>
