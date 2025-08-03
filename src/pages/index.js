@@ -52,7 +52,7 @@ export default function Home() {
         {/* Hero Section with Rotating Quotes */}
         <main className="container mx-auto px-4 py-8 md:py-12">
           <section className="max-w-3xl mx-auto text-center">
-            <h2 className="text-3xl md:text-5xl font-bold text-teal-900 mb-6 font-noto-urdu">
+            <h2 className="text-2xl md:text-5xl font-bold text-teal-900 mb-6 font-noto-urdu">
               جٹ برادری کا مکمل انسائیکلو پیڈیا
             </h2>
             
@@ -66,7 +66,7 @@ export default function Home() {
                   animate="center"
                   exit="exit"
                   transition={{ duration: 0.5 }}
-                  className="text-xl md:text-2xl font-bold text-amber-700 font-noto-urdu px-4"
+                  className="text-xl md:text-2xl font-extrabold text-black font-noto-urdu px-4"
                 >
                   {braveQuotes[currentQuoteIndex]}
                 </motion.p>
@@ -82,7 +82,7 @@ export default function Home() {
 
           {/* Features Grid */}
           <section className="mt-12 md:mt-16">
-            <h3 className="text-2xl md:text-3xl font-bold text-center text-teal-900 mb-8 md:mb-12 font-noto-urdu">
+            <h3 className="text-xl md:text-3xl font-bold text-center text-teal-900 mb-8 md:mb-12 font-noto-urdu">
               ہمارے خاص موضوعات
             </h3>
             
@@ -118,11 +118,11 @@ export default function Home() {
                   whileHover={{ scale: 1.03 }}
                   className="bg-white rounded-lg shadow-md overflow-hidden border border-teal-100 hover:shadow-lg transition duration-300"
                 >
-                  <div className="bg-teal-600 p-4 md:p-6 text-white">
-                    <h4 className="font-bold text-lg md:text-xl font-noto-urdu">{feature.title}</h4>
+                  <div className="bg-teal-600 p-3 md:p-6 text-white">
+                    <h4 className="font-bold text-base md:text-xl font-noto-urdu">{feature.title}</h4>
                   </div>
-                  <div className="p-4 md:p-6">
-                    <p className="text-teal-700 text-sm md:text-base font-noto-urdu">{feature.description}</p>
+                  <div className="p-3 md:p-6">
+                    <p className="text-teal-700 text-xs md:text-base font-noto-urdu">{feature.description}</p>
                   </div>
                 </motion.div>
               ))}

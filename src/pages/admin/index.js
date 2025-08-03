@@ -381,7 +381,7 @@ export default function AdminDashboard() {
                         type="text"
                         value={articleForm.title}
                         onChange={(e) => setArticleForm({...articleForm, title: e.target.value})}
-                        className="w-full p-2 border border-gray-300 rounded-md"
+                        className="w-full p-2 border border-gray-300 rounded-md text-gray-800 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         required
                       />
                     </div>
@@ -390,7 +390,7 @@ export default function AdminDashboard() {
                       <select
                         value={articleForm.category_id}
                         onChange={(e) => setArticleForm({...articleForm, category_id: e.target.value})}
-                        className="w-full p-2 border border-gray-300 rounded-md"
+                        className="w-full p-2 border border-gray-300 rounded-md text-gray-800 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         required
                       >
                         <option value="">Select category</option>
@@ -404,7 +404,7 @@ export default function AdminDashboard() {
                       <textarea
                         value={articleForm.content}
                         onChange={(e) => setArticleForm({...articleForm, content: e.target.value})}
-                        className="w-full p-2 border border-gray-300 rounded-md min-h-[200px]"
+                        className="w-full p-2 border border-gray-300 rounded-md min-h-[200px] text-gray-800 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         required
                       />
                     </div>
@@ -413,7 +413,7 @@ export default function AdminDashboard() {
                       <input
                         type="file"
                         onChange={(e) => setArticleForm({...articleForm, thumbnail: e.target.files[0]})}
-                        className="w-full p-2 border border-gray-300 rounded-md"
+                        className="w-full p-2 border border-gray-300 rounded-md text-gray-800 bg-white file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                         accept="image/*"
                       />
                     </div>
@@ -423,7 +423,7 @@ export default function AdminDashboard() {
                       <button
                         type="button"
                         onClick={() => resetForm('article')}
-                        className="px-4 py-2 bg-gray-500 text-white rounded-md"
+                        className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors"
                       >
                         Cancel
                       </button>
@@ -431,7 +431,7 @@ export default function AdminDashboard() {
                     <button
                       type="submit"
                       disabled={isLoading}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md disabled:bg-blue-400"
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed"
                     >
                       {isLoading ? 'Saving...' : isEditing.article ? 'Update' : 'Create'}
                     </button>
@@ -449,12 +449,12 @@ export default function AdminDashboard() {
                       placeholder="Search articles..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="p-2 border border-gray-300 rounded-md text-sm w-full"
+                      className="p-2 border border-gray-300 rounded-md text-sm w-full text-gray-800 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                     <select
                       value={selectedCategory}
                       onChange={(e) => setSelectedCategory(e.target.value)}
-                      className="p-2 border border-gray-300 rounded-md text-sm w-full sm:w-auto"
+                      className="p-2 border border-gray-300 rounded-md text-sm w-full sm:w-auto text-gray-800 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     >
                       <option value="">All Categories</option>
                       {categories.map(cat => (
@@ -474,7 +474,7 @@ export default function AdminDashboard() {
                       <div key={article.id} className="border-b border-gray-200 pb-4 last:border-b-0">
                         <div className="flex flex-col sm:flex-row justify-between gap-4">
                           <div className="flex-1">
-                            <h3 className="font-medium">{article.title}</h3>
+                            <h3 className="font-medium text-gray-800">{article.title}</h3>
                             <p className="text-sm text-gray-600 mt-1 line-clamp-2">
                               {article.content.substring(0, 200)}...
                             </p>
@@ -490,13 +490,13 @@ export default function AdminDashboard() {
                           <div className="flex gap-2 self-end sm:self-center">
                             <button
                               onClick={() => handleEdit('article', article)}
-                              className="px-3 py-1 bg-blue-100 text-blue-800 rounded-md text-sm hover:bg-blue-200"
+                              className="px-3 py-1 bg-blue-100 text-blue-800 rounded-md text-sm hover:bg-blue-200 transition-colors"
                             >
                               Edit
                             </button>
                             <button
                               onClick={() => handleDelete('article', article.id)}
-                              className="px-3 py-1 bg-red-100 text-red-800 rounded-md text-sm hover:bg-red-200"
+                              className="px-3 py-1 bg-red-100 text-red-800 rounded-md text-sm hover:bg-red-200 transition-colors"
                             >
                               Delete
                             </button>
@@ -524,7 +524,7 @@ export default function AdminDashboard() {
                       type="text"
                       value={categoryForm.name}
                       onChange={(e) => setCategoryForm({name: e.target.value})}
-                      className="w-full p-2 border border-gray-300 rounded-md"
+                      className="w-full p-2 border border-gray-300 rounded-md text-gray-800 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       required
                     />
                   </div>
@@ -533,7 +533,7 @@ export default function AdminDashboard() {
                       <button
                         type="button"
                         onClick={() => resetForm('category')}
-                        className="px-4 py-2 bg-gray-500 text-white rounded-md"
+                        className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors"
                       >
                         Cancel
                       </button>
@@ -541,7 +541,7 @@ export default function AdminDashboard() {
                     <button
                       type="submit"
                       disabled={isLoading}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md disabled:bg-blue-400"
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed"
                     >
                       {isLoading ? 'Saving...' : isEditing.category ? 'Update' : 'Create'}
                     </button>
@@ -559,9 +559,9 @@ export default function AdminDashboard() {
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                     {categories.map(category => (
-                      <div key={category.id} className="border border-gray-200 rounded-md p-4">
+                      <div key={category.id} className="border border-gray-200 rounded-md p-4 hover:shadow-md transition-shadow">
                         <div className="flex justify-between items-center">
-                          <span className="font-medium">{category.name}</span>
+                          <span className="font-medium text-gray-800">{category.name}</span>
                           <div className="flex gap-2">
                             <button
                               onClick={() => handleEdit('category', category)}
@@ -596,7 +596,7 @@ export default function AdminDashboard() {
                     placeholder="Search users..."
                     value={userSearchTerm}
                     onChange={(e) => setUserSearchTerm(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-md text-sm"
+                    className="w-full p-2 border border-gray-300 rounded-md text-sm text-gray-800 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
               </div>
@@ -608,7 +608,7 @@ export default function AdminDashboard() {
               ) : (
                 <div className="space-y-4">
                   {users.map(user => (
-                    <div key={user.id} className="border-b border-gray-200 pb-4 last:border-b-0">
+                    <div key={user.id} className="border-b border-gray-200 pb-4 last:border-b-0 hover:bg-gray-50 transition-colors">
                       <div className="flex items-center gap-3">
                         {user.profile?.profile_picture && (
                           <Link href={`/profile/${user.id}`} className="relative w-10 h-10">
@@ -622,7 +622,7 @@ export default function AdminDashboard() {
                         )}
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <Link href={`/profile/${user.id}`} className="font-medium hover:text-blue-600 truncate">
+                            <Link href={`/profile/${user.id}`} className="font-medium hover:text-blue-600 truncate text-gray-800">
                               {user.username}
                             </Link>
                             {user.is_staff && (
@@ -642,14 +642,14 @@ export default function AdminDashboard() {
                           {!user.is_staff && (
                             <button
                               onClick={() => handleMakeAdmin(user.id)}
-                              className="px-3 py-1 bg-green-100 text-green-800 rounded-md text-sm hover:bg-green-200 whitespace-nowrap"
+                              className="px-3 py-1 bg-green-100 text-green-800 rounded-md text-sm hover:bg-green-200 whitespace-nowrap transition-colors"
                             >
                               Make Admin
                             </button>
                           )}
                           <button
                             onClick={() => handleSuspendUser(user.id)}
-                            className={`px-3 py-1 rounded-md text-sm whitespace-nowrap ${
+                            className={`px-3 py-1 rounded-md text-sm whitespace-nowrap transition-colors ${
                               user.is_active 
                                 ? 'bg-red-100 text-red-800 hover:bg-red-200'
                                 : 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
@@ -677,7 +677,7 @@ export default function AdminDashboard() {
                     placeholder="Search comments..."
                     value={commentSearchTerm}
                     onChange={(e) => setCommentSearchTerm(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-md text-sm"
+                    className="w-full p-2 border border-gray-300 rounded-md text-sm text-gray-800 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
               </div>
@@ -689,7 +689,7 @@ export default function AdminDashboard() {
               ) : (
                 <div className="space-y-4">
                   {comments.map(comment => (
-                    <div key={comment.id} className="border-b border-gray-200 pb-4 last:border-b-0">
+                    <div key={comment.id} className="border-b border-gray-200 pb-4 last:border-b-0 hover:bg-gray-50 transition-colors">
                       <div className="flex gap-3">
                         {comment.user.profile?.profile_picture && (
                           <Link href={`/profile/${comment.user.id}`} className="relative w-10 h-10 flex-shrink-0">
@@ -703,14 +703,14 @@ export default function AdminDashboard() {
                         )}
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <Link href={`/profile/${comment.user.id}`} className="font-medium hover:text-blue-600 truncate">
+                            <Link href={`/profile/${comment.user.id}`} className="font-medium hover:text-blue-600 truncate text-gray-800">
                               {comment.user.username}
                             </Link>
                             <span className="text-xs text-gray-500 whitespace-nowrap">
                               {new Date(comment.created_at).toLocaleString()}
                             </span>
                           </div>
-                          <p className="text-sm mt-1 break-words">{comment.content}</p>
+                          <p className="text-sm mt-1 break-words text-gray-800">{comment.content}</p>
                           <Link 
                             href={`/articles/${comment.article.id}`} 
                             className="text-xs text-blue-600 hover:underline mt-1 block truncate"
