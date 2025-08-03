@@ -52,9 +52,13 @@ export default function AdminDashboard() {
     }
   }, [router]);
 
-  // Enhanced API request handler
+  // Enhanced API request handler with proper token handling
   const makeRequest = useCallback(async (url, method = 'GET', body = null, isFormData = false) => {
     const token = localStorage.getItem('access_token');
+    if (!token) {
+      return { success: false, error: 'No authentication token found' };
+    }
+
     const headers = {
       'Authorization': `Bearer ${token}`,
     };
@@ -95,7 +99,7 @@ export default function AdminDashboard() {
       if (!response.ok) {
         return {
           success: false,
-          error: data.detail || `Request failed with status ${response.status}`
+          error: data.detail || data.message || `Request failed with status ${response.status}`
         };
       }
 
@@ -103,7 +107,7 @@ export default function AdminDashboard() {
     } catch (err) {
       return {
         success: false,
-        error: err.message
+        error: err.message || 'Network error occurred'
       };
     }
   }, []);
@@ -191,7 +195,8 @@ export default function AdminDashboard() {
     try {
       const isEdit = isEditing[type];
       const id = currentId[type];
-      const url = `${API_URL}/${type}s/${isEdit ? `${id}/` : ''}`;
+      const endpoint = type === 'article' ? 'articles' : 'categories';
+      const url = `${API_URL}/${endpoint}/${isEdit ? `${id}/` : ''}`;
       
       let body;
       let isFormData = false;
@@ -265,7 +270,8 @@ export default function AdminDashboard() {
     if (!window.confirm(`Are you sure you want to delete this ${type}?`)) return;
 
     try {
-      const url = `${API_URL}/${type}s/${id}/`;
+      const endpoint = type === 'comment' ? 'comments' : `${type}s`;
+      const url = `${API_URL}/${endpoint}/${id}/`;
       const result = await makeRequest(url, 'DELETE');
 
       if (!result.success) {
@@ -283,6 +289,8 @@ export default function AdminDashboard() {
         }));
       } else if (type === 'category') {
         setCategories(await fetchData('categories'));
+      } else if (type === 'comment') {
+        setComments(await fetchData('comments', { search: commentSearchTerm }));
       }
     } catch (err) {
       setError(err.message);

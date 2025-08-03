@@ -4,13 +4,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useState } from 'react';
 
 export default function Home() {
-  // Brave and powerful Urdu quotes about Jutt community
+  // Updated historical and inspirational Urdu quotes about Jutt community
   const braveQuotes = [
-    "جٹ دا جھنڈا ہمیشہ بلند رہے، ہمت ہماری شناخت ہے",
-    "ہم جٹ ہیں، ہمت ہماری وراثت ہے، بزدلی ہمارے خون میں نہیں",
-    "جٹ کی تلوار سے دشمن کبھی نہیں جیتے، ہماری بہادری کی داستانیں تاریخ سناتی ہیں",
-    "جٹ کا ایک ہی نعرہ: زمین ہماری، ناموس ہماری، جان ہماری",
-    "جٹ جھکنے سے پہلے ٹوٹ جاتا ہے"
+    "جٹ کی بہادری تاریخ کے اوراق میں سونے سے لکھی گئی ہے، ہماری ہمت ہماری شناخت ہے",
+    "جٹ کی تلوار ہمیشہ حق کے لیے اٹھی، ہمارے آباؤ اجداد نے کبھی جھکنا نہ سیکھا",
+    "جٹ قوم کی داستانیں بہادری اور قربانی کی عظیم مثالیں ہیں",
+    "ہم جٹ ہیں، ہماری رگوں میں ہمت اور غیرت کا خون دوڑتا ہے",
+    "جٹ کا عزم پہاڑوں کو چیر دیتا ہے، ہماری تاریخ گواہ ہے"
   ];
 
   const [currentQuoteIndex, setCurrentQuoteIndex] = useState(0);
@@ -23,7 +23,7 @@ export default function Home() {
       );
     }, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [braveQuotes.length]);
 
   // Animation variants
   const quoteVariants = {
@@ -71,6 +71,17 @@ export default function Home() {
                   {braveQuotes[currentQuoteIndex]}
                 </motion.p>
               </AnimatePresence>
+            </div>
+
+            {/* Hadith Section */}
+            <div className="bg-white rounded-lg shadow-md p-6 mb-8 max-w-2xl mx-auto">
+              <h3 className="text-lg md:text-xl font-bold text-teal-900 mb-4 font-noto-urdu">
+                رسول اللہ صلی اللہ علیہ وسلم کا فرمان
+              </h3>
+              <p className="text-base md:text-lg text-gray-800 font-noto-urdu leading-relaxed">
+                رسول اللہ صلی اللہ علیہ وسلم نے فرمایا: <br />
+                &quot;بے شک اللہ تعالیٰ نے تم سے جاہلیت کی نخوت و غرور کو ختم کر دیا اور باپ دادا کا نام لے کر فخر کرنے سے روک دیا۔ اب دو قسم کے لوگ ہیں: ایک متقی و پرہیزگار مومن اور دوسرا بدبخت فاجر۔ تم سب آدم کی اولاد ہو اور آدم مٹی سے پیدا ہوئے ہیں۔ لوگوں کو اپنی قوموں پر فخر کرنا چھوڑ دینا چاہیے کیونکہ ان کے آباء جہنم کے کوئلوں میں سے کوئلہ ہیں اس لیے کہ وہ کافر تھے اور کوئلے پر فخر کرنے کے کیا معنی۔ اگر انہوں نے اپنے آباء پر فخر کرنا نہ چھوڑا تو اللہ کے نزدیک اس گبریلے کیڑے سے بھی زیادہ ذلیل ہو جائیں گے جو اپنی ناک سے گندگی کو دھکیل کر لے جاتا ہے۔&quot;
+              </p>
             </div>
 
             <Link href="/articles" passHref legacyBehavior>
