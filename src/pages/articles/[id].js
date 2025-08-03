@@ -2,78 +2,21 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import Navbar from '../../components/Navbar';
 import CommentSection from '../../components/CommentSection';
-import Image from 'next/image';
 import { useRouter } from 'next/router';
+import Head from 'next/head';
+import { FaHeart, FaRegHeart, FaEye, FaCalendarAlt, FaUser, FaYoutube } from 'react-icons/fa';
 
-// Create axios instance with enhanced interceptors
 const api = axios.create({
-  baseURL: 'http://localhost:8000/api/',
+  baseURL: process.env.NEXT_PUBLIC_API_URL || 'https://haseebclan.pythonanywhere.com/api/',
 });
 
-// Request interceptor
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
-}, (error) => {
-  return Promise.reject(error);
 });
-
-// Enhanced response interceptor
-api.interceptors.response.use(
-  response => response,
-  async (error) => {
-    const originalRequest = error.config;
-    
-    if (error.response?.status === 401 && 
-        !originalRequest._retry &&
-        !originalRequest.url.includes('token/')) {
-      
-      originalRequest._retry = true;
-      const refreshToken = localStorage.getItem('refresh_token');
-      
-      if (!refreshToken) {
-        handleLogout();
-        return Promise.reject(error);
-      }
-
-      try {
-        const response = await axios.post(
-          'http://localhost:8000/api/token/refresh/',
-          { refresh: refreshToken }
-        );
-        
-        localStorage.setItem('access_token', response.data.access);
-        api.defaults.headers.common['Authorization'] = `Bearer ${response.data.access}`;
-        originalRequest.headers['Authorization'] = `Bearer ${response.data.access}`;
-        
-        return api(originalRequest);
-      } catch (refreshError) {
-        console.error('Refresh token failed:', refreshError);
-        handleLogout();
-        return Promise.reject(refreshError);
-      }
-    }
-    return Promise.reject(error);
-  }
-);
-
-const handleLogout = () => {
-  localStorage.removeItem('access_token');
-  localStorage.removeItem('refresh_token');
-  localStorage.removeItem('user');
-  window.location.href = '/login';
-};
-
-const getAvatarColor = (userId) => {
-  const colors = [
-    'bg-red-400', 'bg-blue-400', 'bg-green-400', 
-    'bg-yellow-400', 'bg-purple-400', 'bg-pink-400'
-  ];
-  return colors[userId % colors.length];
-};
 
 export default function ArticleDetail() {
   const [article, setArticle] = useState(null);
@@ -86,27 +29,16 @@ export default function ArticleDetail() {
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      setCurrentUser(JSON.parse(storedUser));
-    }
-
-    if (!router.isReady || !id) {
-      if (!id) setError('Invalid article ID');
-      setIsLoading(false);
-      return;
-    }
+    if (storedUser) setCurrentUser(JSON.parse(storedUser));
+    if (!router.isReady || !id) return;
 
     const fetchArticle = async () => {
       try {
         setIsLoading(true);
         const response = await api.get(`articles/${id}/`);
         setArticle(response.data);
-        setError('');
       } catch (error) {
-        console.error('Error fetching article:', error);
-        setError(error.response?.status === 404 
-          ? 'Article not found' 
-          : 'Failed to load article');
+        setError(error.response?.status === 404 ? 'Article not found' : 'Failed to load article');
       } finally {
         setIsLoading(false);
       }
@@ -116,161 +48,136 @@ export default function ArticleDetail() {
   }, [router.isReady, id]);
 
   const handleLikeArticle = async () => {
-    if (!currentUser) {
-      router.push('/login');
-      return;
-    }
-
+    if (!currentUser) return router.push('/login');
     try {
       setIsLiking(true);
       await api.post('like/', { article_id: article.id });
-      
-      // Update the article data after like action
       const updatedArticle = await api.get(`articles/${id}/`);
       setArticle(updatedArticle.data);
     } catch (err) {
-      console.error('Error liking article:', err);
       setError('Failed to like article');
     } finally {
       setIsLiking(false);
     }
   };
 
-  const handleCommentUpdate = async (commentId, updatedContent) => {
-    try {
-      await api.put(`comments/${commentId}/`, { content: updatedContent });
-      const updatedArticle = await api.get(`articles/${id}/`);
-      setArticle(updatedArticle.data);
-      return true;
-    } catch (error) {
-      console.error('Error updating comment:', error);
-      if (error.response?.status === 403) {
-        setError('You are not authorized to edit this comment');
-      } else {
-        setError('Failed to update comment');
-      }
-      return false;
-    }
-  };
-
-  const handleCommentDelete = async (commentId) => {
-    try {
-      await api.delete(`comments/${commentId}/`);
-      const updatedArticle = await api.get(`articles/${id}/`);
-      setArticle(updatedArticle.data);
-      return true;
-    } catch (error) {
-      console.error('Error deleting comment:', error);
-      if (error.response?.status === 403) {
-        setError('You are not authorized to delete this comment');
-      } else {
-        setError('Failed to delete comment');
-      }
-      return false;
-    }
-  };
-
   if (isLoading) return (
-    <div className="flex justify-center items-center h-screen">
-      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+    <div className="min-h-screen bg-gradient-to-br from-teal-100 to-coral-100 flex items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-teal-600"></div>
     </div>
   );
 
-  if (error) return <div className="container mx-auto p-4 text-red-500">{error}</div>;
-  if (!article) return <div className="container mx-auto p-4">Article not found</div>;
+  if (error || !article) return (
+    <div className="min-h-screen bg-gradient-to-br from-teal-100 to-coral-100 flex flex-col items-center justify-center p-4">
+      <p className="text-lg text-teal-800 mb-4">{error || 'Article not found'}</p>
+    </div>
+  );
 
   return (
-    <div>
+    <div className="min-h-screen bg-gradient-to-br from-teal-100 to-coral-100">
+      <Head>
+        <title>{article.title} | Jutt Clans</title>
+        <meta name="description" content={article.meta_description || article.title} />
+        <link rel="icon" href="/jutt-icon.png" />
+      </Head>
+
       <Navbar currentPage="articles" />
-      <div className="container mx-auto p-4 max-w-4xl">
-        <h1 className="text-3xl font-bold mb-4">{article.title}</h1>
-        
-        {/* Author Info */}
-        <div className="flex items-center gap-3 mb-4">
-          {article.author.profile?.profile_picture ? (
-            <Image
-              src={article.author.profile.profile_picture}
-              alt={article.author.username}
-              width={40}
-              height={40}
-              className="rounded-full"
-            />
-          ) : (
-            <div className={`w-10 h-10 rounded-full ${getAvatarColor(article.author.id)} flex items-center justify-center`}>
-              <span className="text-white font-medium">
-                {article.author.username.charAt(0).toUpperCase()}
-              </span>
-            </div>
-          )}
-          <div>
-            <p className="font-medium">{article.author.username}</p>
-            <p className="text-sm text-gray-500">
-              {new Date(article.created_at).toLocaleDateString()}
-            </p>
-          </div>
-        </div>
-
-        {article.thumbnail && (
-          <div className="relative w-full h-64 mb-4 rounded-lg overflow-hidden">
-            <Image
-              src={article.thumbnail}
-              alt={article.title}
-              fill
-              className="object-cover"
-              priority
-            />
-          </div>
-        )}
-
-        <div className="flex items-center gap-4 mb-4 text-sm text-gray-500">
-          <span>Category: {article.category.name}</span>
-          <span>Views: {article.views}</span>
-          <span>Likes: {article.likes}</span>
-        </div>
-
-        {/* Like Button */}
-        <div className="mb-6">
-          <button
-            onClick={handleLikeArticle}
-            disabled={isLiking}
-            className={`flex items-center gap-1 px-3 py-1 rounded-full border ${
-              article.is_liked 
-                ? 'bg-red-50 border-red-200 text-red-500' 
-                : 'bg-gray-50 border-gray-200 text-gray-500'
-            } hover:bg-gray-100 transition-colors`}
-          >
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              className="h-5 w-5" 
-              viewBox="0 0 20 20" 
-              fill={article.is_liked ? "currentColor" : "none"} 
-              stroke="currentColor"
-              strokeWidth="2"
+      
+      {/* Main Content - Directly connected to navbar */}
+      <div className="w-full bg-white">
+        <div className="container mx-auto px-4 py-8">
+          {/* Article Title and YouTube Icon */}
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl md:text-3xl font-bold text-teal-900 text-left">
+              {article.title}
+            </h1>
+            <a 
+              href="https://www.youtube.com/@Tahir_Farz" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-red-600 hover:text-red-800 transition-colors"
             >
-              <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
-            </svg>
-            <span>{article.is_liked ? 'Unlike' : 'Like'}</span>
-            {isLiking && (
-              <svg className="animate-spin ml-1 h-4 w-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-            )}
-          </button>
-        </div>
+              <FaYoutube className="text-2xl md:text-3xl" />
+            </a>
+          </div>
 
-        <div className="prose max-w-none mb-8" dangerouslySetInnerHTML={{ __html: article.content }} />
-        console.log(article.id)
-        {/* Comment Section */}
-        <CommentSection 
-          articleId={article.id} 
-          api={api} 
-          currentUser={currentUser} 
-          onCommentUpdate={handleCommentUpdate}
-          onCommentDelete={handleCommentDelete}
-          getAvatarColor={getAvatarColor}
-        />
+          {/* Article Content - Left aligned with proper line breaks */}
+          <div 
+            className="text-gray-800 mb-8 text-left w-full"
+            style={{ 
+              lineHeight: '1.8',
+              fontSize: '1.1rem',
+              wordBreak: 'break-word',
+              whiteSpace: 'pre-line'
+            }}
+            dangerouslySetInnerHTML={{ __html: article.content }} 
+          />
+
+          {/* Article Metadata */}
+          <div className="border-t border-teal-200 pt-6">
+            <div className="flex flex-col sm:flex-row justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-4 text-sm text-teal-700">
+                <div className="flex items-center">
+                  <FaUser className="mr-2" />
+                  <span>Posted by {article.author.username}</span>
+                </div>
+                <div className="flex items-center">
+                  <FaCalendarAlt className="mr-2" />
+                  <span>{new Date(article.created_at).toLocaleDateString('en-US', { 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                  })}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 text-sm text-teal-700">
+                <div className="flex items-center">
+                  <FaEye className="mr-2" />
+                  <span>{article.views} views</span>
+                </div>
+                
+                <button
+                  onClick={handleLikeArticle}
+                  disabled={isLiking}
+                  className={`flex items-center ${currentUser ? 'hover:text-red-500 cursor-pointer' : 'cursor-default'} ${
+                    article.is_liked ? 'text-red-500' : 'text-teal-700'
+                  } transition-colors`}
+                >
+                  {currentUser && article.is_liked ? (
+                    <FaHeart className="mr-2" />
+                  ) : (
+                    <FaRegHeart className="mr-2" />
+                  )}
+                  <span>{article.likes} {article.is_liked && currentUser ? 'liked' : 'likes'}</span>
+                  {isLiking && <span className="ml-1">...</span>}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* Comment Section - Seamlessly connected */}
+      <div className="w-full bg-white border-t border-teal-100">
+        <div className="container mx-auto px-4 py-8">
+          <h2 className="text-xl font-semibold text-teal-900 mb-4 text-left">Comments</h2>
+          <CommentSection 
+            articleId={article.id} 
+            api={api} 
+            currentUser={currentUser}
+          />
+        </div>
+      </div>
+
+      {/* Footer */}
+      <footer className="bg-teal-800 text-white py-6">
+        <div className="container mx-auto px-4 text-center">
+          <p className="text-sm text-teal-300">
+            © {new Date().getFullYear()} Jatt Clans. All rights reserved.
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }

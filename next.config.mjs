@@ -1,5 +1,3 @@
-// next.config.mjs
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
@@ -8,6 +6,11 @@ const nextConfig = {
         protocol: 'http',
         hostname: 'localhost',
         port: '8000',
+        pathname: '/media/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'haseebclan.pythonanywhere.com',
         pathname: '/media/**',
       },
     ],

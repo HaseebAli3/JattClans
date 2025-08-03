@@ -1,22 +1,32 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Navbar from '../../components/Navbar';
+import Link from 'next/link';
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const API_URL = 'http://localhost:8000/api';
+  const API_URL = 'https://haseebclan.pythonanywhere.com/api/';
 
   // State management
   const [activeTab, setActiveTab] = useState('articles');
   const [articles, setArticles] = useState([]);
   const [categories, setCategories] = useState([]);
   const [users, setUsers] = useState([]);
+  const [comments, setComments] = useState([]);
+  const [stats, setStats] = useState({
+    totalArticles: 0,
+    totalUsers: 0,
+    totalComments: 0,
+    totalCategories: 0
+  });
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [userSearchTerm, setUserSearchTerm] = useState('');
+  const [commentSearchTerm, setCommentSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  
+  const [success, setSuccess] = useState('');
+
   // Article form state
   const [articleForm, setArticleForm] = useState({
     title: '',
@@ -26,7 +36,7 @@ export default function AdminDashboard() {
   });
   const [isEditingArticle, setIsEditingArticle] = useState(false);
   const [currentArticleId, setCurrentArticleId] = useState(null);
-  
+
   // Category form state
   const [categoryForm, setCategoryForm] = useState({
     name: ''
@@ -39,6 +49,8 @@ export default function AdminDashboard() {
     const user = JSON.parse(localStorage.getItem('user'));
     if (!user || !user.is_staff) {
       router.push('/login');
+    } else {
+      fetchStats();
     }
   }, [router]);
 
@@ -51,8 +63,47 @@ export default function AdminDashboard() {
       fetchCategories();
     } else if (activeTab === 'users') {
       fetchUsers();
+    } else if (activeTab === 'comments') {
+      fetchComments();
     }
   }, [activeTab]);
+
+  // Fetch website statistics
+  const fetchStats = async () => {
+    try {
+      const token = localStorage.getItem('access_token');
+      const [articlesRes, usersRes, commentsRes, categoriesRes] = await Promise.all([
+        fetch(`${API_URL}/articles/`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch(`${API_URL}/users/`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch(`${API_URL}/comments/`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch(`${API_URL}/categories/`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+      ]);
+
+      const [articlesData, usersData, commentsData, categoriesData] = await Promise.all([
+        articlesRes.json(),
+        usersRes.json(),
+        commentsRes.json(),
+        categoriesRes.json()
+      ]);
+
+      setStats({
+        totalArticles: articlesData.count || articlesData.length,
+        totalUsers: usersData.count || usersData.length,
+        totalComments: commentsData.count || commentsData.length,
+        totalCategories: categoriesData.length
+      });
+    } catch (err) {
+      setError('Failed to fetch statistics');
+    }
+  };
 
   const fetchArticles = async () => {
     setIsLoading(true);
@@ -85,7 +136,12 @@ export default function AdminDashboard() {
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch(`${API_URL}/categories/`);
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_URL}/categories/`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (!response.ok) throw new Error('Failed to fetch categories');
       const data = await response.json();
       setCategories(data);
@@ -121,6 +177,41 @@ export default function AdminDashboard() {
     }
   };
 
+  const fetchComments = async () => {
+    setIsLoading(true);
+    try {
+      const token = localStorage.getItem('access_token');
+      let url = `${API_URL}/comments/`;
+      
+      if (commentSearchTerm) {
+        url += `?search=${commentSearchTerm}`;
+      }
+
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch comments');
+      
+      const data = await response.json();
+      setComments(data.results || data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Format content with line breaks
+  const formatContent = (content) => {
+    if (!content) return '';
+    return content.split('\n').map(paragraph => {
+      return paragraph.match(/.{1,80}(\s|$)/g)?.join('\n') || paragraph;
+    }).join('\n');
+  };
+
   // Article handlers
   const handleArticleInputChange = (e) => {
     const { name, value } = e.target;
@@ -141,20 +232,22 @@ export default function AdminDashboard() {
     e.preventDefault();
     setIsLoading(true);
     setError('');
+    setSuccess('');
 
     try {
       const token = localStorage.getItem('access_token');
-      const formDataToSend = new FormData();
-      formDataToSend.append('title', articleForm.title);
-      formDataToSend.append('content', articleForm.content);
-      formDataToSend.append('category_id', articleForm.category_id);
+      const formData = new FormData();
+      formData.append('title', articleForm.title);
+      formData.append('content', articleForm.content);
+      formData.append('category_id', articleForm.category_id);
+
       if (articleForm.thumbnail) {
-        formDataToSend.append('thumbnail', articleForm.thumbnail);
+        formData.append('thumbnail', articleForm.thumbnail);
       }
 
       let url = `${API_URL}/articles/`;
       let method = 'POST';
-
+      
       if (isEditingArticle && currentArticleId) {
         url = `${API_URL}/articles/${currentArticleId}/`;
         method = 'PUT';
@@ -165,15 +258,14 @@ export default function AdminDashboard() {
         headers: {
           'Authorization': `Bearer ${token}`
         },
-        body: formDataToSend
+        body: formData
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to save article');
+        throw new Error(errorData.detail || Object.values(errorData)[0]?.[0] || 'Failed to save article');
       }
 
-      // Reset form and refresh articles
       setArticleForm({
         title: '',
         content: '',
@@ -182,7 +274,9 @@ export default function AdminDashboard() {
       });
       setIsEditingArticle(false);
       setCurrentArticleId(null);
+      setSuccess(isEditingArticle ? 'Article updated successfully!' : 'Article created successfully!');
       fetchArticles();
+      fetchStats();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -194,7 +288,7 @@ export default function AdminDashboard() {
     setArticleForm({
       title: article.title,
       content: article.content,
-      category_id: article.category.id,
+      category_id: article.category.id.toString(),
       thumbnail: null
     });
     setIsEditingArticle(true);
@@ -215,7 +309,9 @@ export default function AdminDashboard() {
 
       if (!response.ok) throw new Error('Failed to delete article');
       
+      setSuccess('Article deleted successfully!');
       fetchArticles();
+      fetchStats();
     } catch (err) {
       setError(err.message);
     }
@@ -234,6 +330,7 @@ export default function AdminDashboard() {
     e.preventDefault();
     setIsLoading(true);
     setError('');
+    setSuccess('');
 
     try {
       const token = localStorage.getItem('access_token');
@@ -263,11 +360,12 @@ export default function AdminDashboard() {
         throw new Error(errorData.message || 'Failed to save category');
       }
 
-      // Reset form and refresh categories
       setCategoryForm({ name: '' });
       setIsEditingCategory(false);
       setCurrentCategoryId(null);
+      setSuccess(isEditingCategory ? 'Category updated successfully!' : 'Category created successfully!');
       fetchCategories();
+      fetchStats();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -297,7 +395,9 @@ export default function AdminDashboard() {
 
       if (!response.ok) throw new Error('Failed to delete category');
       
+      setSuccess('Category deleted successfully!');
       fetchCategories();
+      fetchStats();
     } catch (err) {
       setError(err.message);
     }
@@ -317,9 +417,43 @@ export default function AdminDashboard() {
         }
       });
 
-      if (!response.ok) throw new Error('Failed to suspend user');
-      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to suspend user');
+      }
+
+      const result = await response.json();
+      setSuccess(result.message);
       fetchUsers();
+      fetchStats();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleMakeAdmin = async (userId) => {
+    if (!window.confirm('Are you sure you want to make this user an admin?')) return;
+
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_URL}/users/${userId}/make-admin/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ is_staff: true })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to make user admin');
+      }
+
+      const result = await response.json();
+      setSuccess(result.message);
+      fetchUsers();
+      fetchStats();
     } catch (err) {
       setError(err.message);
     }
@@ -330,354 +464,496 @@ export default function AdminDashboard() {
     fetchUsers();
   };
 
-  return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-8">Admin Dashboard</h1>
+  const handleCommentSearch = (e) => {
+    e.preventDefault();
+    fetchComments();
+  };
+
+  const handleDeleteComment = async (commentId) => {
+    if (!window.confirm('Are you sure you want to delete this comment?')) return;
+
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_URL}/comments/${commentId}/`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to delete comment');
       
-      {/* Navigation Tabs */}
-      <div className="flex border-b border-gray-200 mb-6">
-        <button
-          className={`py-2 px-4 font-medium ${activeTab === 'articles' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
-          onClick={() => setActiveTab('articles')}
-        >
-          Articles
-        </button>
-        <button
-          className={`py-2 px-4 font-medium ${activeTab === 'categories' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
-          onClick={() => setActiveTab('categories')}
-        >
-          Categories
-        </button>
-        <button
-          className={`py-2 px-4 font-medium ${activeTab === 'users' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
-          onClick={() => setActiveTab('users')}
-        >
-          Users
-        </button>
-      </div>
+      setSuccess('Comment deleted successfully!');
+      fetchComments();
+      fetchStats();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
 
-      {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-          {error}
+  return (
+    <div className="min-h-screen bg-gray-100">
+      <Navbar />
+      <div className="container mx-auto px-4 py-12 sm:px-6 lg:px-8">
+        <h1 className="text-4xl font-bold mb-10 text-gray-900">Admin Dashboard</h1>
+
+        {/* Stats Section */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+          {[
+            { title: 'Total Articles', value: stats.totalArticles },
+            { title: 'Total Users', value: stats.totalUsers },
+            { title: 'Total Comments', value: stats.totalComments },
+            { title: 'Total Categories', value: stats.totalCategories },
+          ].map((stat, index) => (
+            <div key={index} className="bg-white rounded-xl shadow-sm p-6 border border-gray-200 hover:shadow-md transition-shadow">
+              <h3 className="text-lg font-semibold text-gray-700">{stat.title}</h3>
+              <p className="text-3xl font-bold text-blue-600 mt-2">{stat.value}</p>
+            </div>
+          ))}
         </div>
-      )}
 
-      {/* Articles Tab */}
-      {activeTab === 'articles' && (
-        <>
-          {/* Search and Filter */}
-          <div className="bg-white p-4 rounded-lg shadow-md mb-8">
-            <form onSubmit={(e) => { e.preventDefault(); fetchArticles(); }} className="flex flex-wrap gap-4">
-              <div className="flex-1 min-w-[200px]">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded"
-                  placeholder="Search articles..."
-                />
-              </div>
-              <div className="flex-1 min-w-[200px]">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded"
-                >
-                  <option value="">All Categories</option>
-                  {categories.map(category => (
-                    <option key={category.id} value={category.id}>{category.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="self-end">
-                <button
-                  type="submit"
-                  className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-                >
-                  Apply Filters
-                </button>
-              </div>
-            </form>
+        {/* Navigation Tabs */}
+        <div className="flex border-b border-gray-200 mb-8 overflow-x-auto">
+          {['articles', 'categories', 'users', 'comments'].map(tab => (
+            <button
+              key={tab}
+              className={`py-3 px-6 font-medium text-sm uppercase tracking-wide ${
+                activeTab === tab
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-600 hover:text-blue-600'
+              } transition-colors duration-200`}
+              onClick={() => setActiveTab(tab)}
+            >
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
+            {error}
           </div>
+        )}
 
-          {/* Article Form */}
-          <div className="bg-white p-4 rounded-lg shadow-md mb-8">
-            <h2 className="text-xl font-semibold mb-4">
-              {isEditingArticle ? 'Edit Article' : 'Create New Article'}
-            </h2>
-            <form onSubmit={handleArticleSubmit}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+        {success && (
+          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg mb-6">
+            {success}
+          </div>
+        )}
+
+        {/* Articles Tab */}
+        {activeTab === 'articles' && (
+          <>
+            {/* Search and Filter */}
+            <div className="bg-white p-6 rounded-xl shadow-sm mb-8 border border-gray-200">
+              <div className="flex flex-col sm:flex-row sm:items-end gap-4">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Search Articles</label>
                   <input
                     type="text"
-                    name="title"
-                    value={articleForm.title}
-                    onChange={handleArticleInputChange}
-                    className="w-full p-2 border border-gray-300 rounded"
-                    required
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-400"
+                    placeholder="Search articles..."
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
                   <select
-                    name="category_id"
-                    value={articleForm.category_id}
-                    onChange={handleArticleInputChange}
-                    className="w-full p-2 border border-gray-300 rounded"
-                    required
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-900"
                   >
-                    <option value="">Select a category</option>
+                    <option value="">All Categories</option>
                     {categories.map(category => (
                       <option key={category.id} value={category.id}>{category.name}</option>
                     ))}
                   </select>
                 </div>
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Content</label>
-                <textarea
-                  name="content"
-                  value={articleForm.content}
-                  onChange={handleArticleInputChange}
-                  className="w-full p-2 border border-gray-300 rounded min-h-[150px]"
-                  required
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Thumbnail</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleArticleFileChange}
-                  className="w-full p-2 border border-gray-300 rounded"
-                />
-              </div>
-              <div className="flex justify-end gap-2">
-                {isEditingArticle && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsEditingArticle(false);
-                      setArticleForm({
-                        title: '',
-                        content: '',
-                        category_id: '',
-                        thumbnail: null
-                      });
-                    }}
-                    className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
-                  >
-                    Cancel
-                  </button>
-                )}
                 <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:bg-blue-300"
+                  onClick={() => fetchArticles()}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors"
                 >
-                  {isLoading ? 'Saving...' : isEditingArticle ? 'Update Article' : 'Create Article'}
+                  Apply Filters
                 </button>
               </div>
-            </form>
-          </div>
+            </div>
 
-          {/* Articles List */}
-          <div className="bg-white p-4 rounded-lg shadow-md">
-            <h2 className="text-xl font-semibold mb-4">Articles</h2>
-            {isLoading ? (
-              <div className="text-center py-8">Loading articles...</div>
-            ) : articles.length === 0 ? (
-              <div className="text-center py-8">No articles found</div>
-            ) : (
-              <div className="space-y-4">
-                {articles.map(article => (
-                  <div key={article.id} className="border-b border-gray-200 pb-4">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="text-lg font-medium">{article.title}</h3>
-                        <p className="text-sm text-gray-500 mb-2">
-                          Category: {article.category.name} | 
-                          Views: {article.views} | 
-                          Likes: {article.likes} | 
-                          Comments: {article.comments.length}
-                        </p>
-                        <p className="text-gray-700 line-clamp-2">{article.content}</p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleEditArticle(article)}
-                          className="bg-yellow-500 text-white px-3 py-1 rounded text-sm hover:bg-yellow-600"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDeleteArticle(article.id)}
-                          className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
+            {/* Article Form */}
+            <div className="bg-white p-6 rounded-xl shadow-sm mb-8 border border-gray-200">
+              <h2 className="text-2xl font-semibold mb-6 text-gray-900">
+                {isEditingArticle ? 'Edit Article' : 'Create New Article'}
+              </h2>
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
+                    <input
+                      type="text"
+                      name="title"
+                      value={articleForm.title}
+                      onChange={handleArticleInputChange}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-400"
+                      required
+                    />
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </>
-      )}
-
-      {/* Categories Tab */}
-      {activeTab === 'categories' && (
-        <>
-          {/* Category Form */}
-          <div className="bg-white p-4 rounded-lg shadow-md mb-8">
-            <h2 className="text-xl font-semibold mb-4">
-              {isEditingCategory ? 'Edit Category' : 'Create New Category'}
-            </h2>
-            <form onSubmit={handleCategorySubmit}>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                <input
-                  type="text"
-                  name="name"
-                  value={categoryForm.name}
-                  onChange={handleCategoryInputChange}
-                  className="w-full p-2 border border-gray-300 rounded"
-                  required
-                />
-              </div>
-              <div className="flex justify-end gap-2">
-                {isEditingCategory && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                    <select
+                      name="category_id"
+                      value={articleForm.category_id}
+                      onChange={handleArticleInputChange}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                      required
+                    >
+                      <option value="">Select a category</option>
+                      {categories.map(category => (
+                        <option key={category.id} value={category.id}>{category.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Content</label>
+                  <textarea
+                    name="content"
+                    value={articleForm.content}
+                    onChange={handleArticleInputChange}
+                    className="w-full p-3 border border-gray-300 rounded-lg min-h-[150px] focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-400"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Thumbnail</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleArticleFileChange}
+                    className="w-full p-3 border border-gray-300 rounded-lg text-gray-900"
+                  />
+                </div>
+                <div className="flex justify-end gap-3">
+                  {isEditingArticle && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsEditingArticle(false);
+                        setArticleForm({ title: '', content: '', category_id: '', thumbnail: null });
+                        setCurrentArticleId(null);
+                      }}
+                      className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={() => {
-                      setIsEditingCategory(false);
-                      setCategoryForm({ name: '' });
-                    }}
-                    className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+                    onClick={handleArticleSubmit}
+                    disabled={isLoading}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg disabled:bg-blue-300 transition-colors"
                   >
-                    Cancel
+                    {isLoading ? 'Saving...' : isEditingArticle ? 'Update Article' : 'Create Article'}
                   </button>
-                )}
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:bg-blue-300"
-                >
-                  {isLoading ? 'Saving...' : isEditingCategory ? 'Update Category' : 'Create Category'}
-                </button>
+                </div>
               </div>
-            </form>
-          </div>
+            </div>
 
-          {/* Categories List */}
-          <div className="bg-white p-4 rounded-lg shadow-md">
-            <h2 className="text-xl font-semibold mb-4">Categories</h2>
-            {isLoading ? (
-              <div className="text-center py-8">Loading categories...</div>
-            ) : categories.length === 0 ? (
-              <div className="text-center py-8">No categories found</div>
-            ) : (
-              <div className="space-y-4">
-                {categories.map(category => (
-                  <div key={category.id} className="border-b border-gray-200 pb-4">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <h3 className="text-lg font-medium">{category.name}</h3>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleEditCategory(category)}
-                          className="bg-yellow-500 text-white px-3 py-1 rounded text-sm hover:bg-yellow-600"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDeleteCategory(category.id)}
-                          className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600"
-                        >
-                          Delete
-                        </button>
+            {/* Articles List */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+              <h2 className="text-2xl font-semibold mb-6 text-gray-900">Articles</h2>
+              {isLoading ? (
+                <div className="text-center py-10 text-gray-600">Loading articles...</div>
+              ) : articles.length === 0 ? (
+                <div className="text-center py-10 text-gray-600">No articles found</div>
+              ) : (
+                <div className="space-y-6">
+                  {articles.map(article => (
+                    <div key={article.id} className="border-b border-gray-200 pb-6 last:border-b-0">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <h3 className="text-lg font-semibold text-gray-900">{article.title}</h3>
+                          <p className="text-sm text-gray-600 mt-1">
+                            Category: {article.category.name} | Views: {article.views} | Likes: {article.likes} | Comments: {article.comments.length}
+                          </p>
+                          <p className="text-gray-700 mt-2 whitespace-pre-wrap break-words">
+                            {formatContent(article.content).substring(0, 200)}...
+                          </p>
+                        </div>
+                        <div className="flex gap-3 ml-4">
+                          <button
+                            onClick={() => handleEditArticle(article)}
+                            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteArticle(article.id)}
+                            className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </>
-      )}
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
 
-      {/* Users Tab */}
-      {activeTab === 'users' && (
-        <>
-          {/* User Search */}
-          <div className="bg-white p-4 rounded-lg shadow-md mb-8">
-            <form onSubmit={handleUserSearch} className="flex flex-wrap gap-4">
-              <div className="flex-1 min-w-[200px]">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Search Users</label>
-                <input
-                  type="text"
-                  value={userSearchTerm}
-                  onChange={(e) => setUserSearchTerm(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded"
-                  placeholder="Search by username..."
-                />
+        {/* Categories Tab */}
+        {activeTab === 'categories' && (
+          <>
+            {/* Category Form */}
+            <div className="bg-white p-6 rounded-xl shadow-sm mb-8 border border-gray-200">
+              <h2 className="text-2xl font-semibold mb-6 text-gray-900">
+                {isEditingCategory ? 'Edit Category' : 'Create New Category'}
+              </h2>
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={categoryForm.name}
+                    onChange={handleCategoryInputChange}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-400"
+                    required
+                  />
+                </div>
+                <div className="flex justify-end gap-3">
+                  {isEditingCategory && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsEditingCategory(false);
+                        setCategoryForm({ name: '' });
+                        setCurrentCategoryId(null);
+                      }}
+                      className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleCategorySubmit}
+                    disabled={isLoading}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg disabled:bg-blue-300 transition-colors"
+                  >
+                    {isLoading ? 'Saving...' : isEditingCategory ? 'Update Category' : 'Create Category'}
+                  </button>
+                </div>
               </div>
-              <div className="self-end">
+            </div>
+
+            {/* Categories List */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+              <h2 className="text-2xl font-semibold mb-6 text-gray-900">Categories</h2>
+              {isLoading ? (
+                <div className="text-center py-10 text-gray-600">Loading categories...</div>
+              ) : categories.length === 0 ? (
+                <div className="text-center py-10 text-gray-600">No categories found</div>
+              ) : (
+                <div className="space-y-6">
+                  {categories.map(category => (
+                    <div key={category.id} className="border-b border-gray-200 pb-6 last:border-b-0">
+                      <div className="flex justify-between items-center">
+                        <h3 className="text-lg font-semibold text-gray-900">{category.name}</h3>
+                        <div className="flex gap-3">
+                          <button
+                            onClick={() => handleEditCategory(category)}
+                            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteCategory(category.id)}
+                            className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Users Tab */}
+        {activeTab === 'users' && (
+          <>
+            {/* User Search */}
+            <div className="bg-white p-6 rounded-xl shadow-sm mb-8 border border-gray-200">
+              <div className="flex flex-col sm:flex-row sm:items-end gap-4">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Search Users</label>
+                  <input
+                    type="text"
+                    value={userSearchTerm}
+                    onChange={(e) => setUserSearchTerm(e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-400"
+                    placeholder="Search by username..."
+                  />
+                </div>
                 <button
-                  type="submit"
-                  className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+                  onClick={handleUserSearch}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors"
                 >
                   Search
                 </button>
               </div>
-            </form>
-          </div>
+            </div>
 
-          {/* Users List */}
-          <div className="bg-white p-4 rounded-lg shadow-md">
-            <h2 className="text-xl font-semibold mb-4">Registered Users</h2>
-            {isLoading ? (
-              <div className="text-center py-8">Loading users...</div>
-            ) : users.length === 0 ? (
-              <div className="text-center py-8">No users found</div>
-            ) : (
-              <div className="space-y-4">
-                {users.map(user => (
-                  <div key={user.id} className="border-b border-gray-200 pb-4">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <h3 className="text-lg font-medium">{user.username}</h3>
-                        <p className="text-sm text-gray-500">
-                          Email: {user.email} | 
-                          Joined: {new Date(user.date_joined).toLocaleDateString()} | 
-                          Status: {user.is_active ? 'Active' : 'Suspended'} | 
-                          Role: {user.is_staff ? 'Admin' : 'User'}
-                        </p>
-                        {user.profile && (
-                          <p className="text-sm text-gray-500">Bio: {user.profile.bio || 'No bio'}</p>
-                        )}
+            {/* Users List */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+              <h2 className="text-2xl font-semibold mb-6 text-gray-900">Registered Users</h2>
+              {isLoading ? (
+                <div className="text-center py-10 text-gray-600">Loading users...</div>
+              ) : users.length === 0 ? (
+                <div className="text-center py-10 text-gray-600">No users found</div>
+              ) : (
+                <div className="space-y-6">
+                  {users.map(user => (
+                    <div key={user.id} className="border-b border-gray-200 pb-6 last:border-b-0">
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center space-x-4">
+                          {user.profile?.profile_picture && (
+                            <img 
+                              src={user.profile.profile_picture} 
+                              alt="Profile" 
+                              className="w-12 h-12 rounded-full object-cover"
+                            />
+                          )}
+                          <div>
+                            <Link href={`/profile/${user.id}`} className="text-lg font-semibold text-gray-900 hover:text-blue-600 transition-colors">
+                              {user.username}
+                            </Link>
+                            <p className="text-sm text-gray-600 mt-1">
+                              Email: {user.email} | Joined: {new Date(user.date_joined).toLocaleDateString()} | 
+                              Status: <span className={user.is_active ? 'text-green-600' : 'text-red-600'}>
+                                {user.is_active ? 'Active' : 'Suspended'}
+                              </span> | 
+                              Role: <span className={user.is_staff ? 'text-blue-600' : 'text-gray-600'}>
+                                {user.is_staff ? 'Admin' : 'User'}
+                              </span>
+                            </p>
+                            {user.profile && (
+                              <p className="text-sm text-gray-600 mt-1">Bio: {user.profile.bio || 'No bio'}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-3">
+                          <button
+                            onClick={() => handleSuspendUser(user.id)}
+                            className={`px-4 py-2 rounded-lg text-sm text-white ${
+                              user.is_active ? 'bg-red-500 hover:bg-red-600' : 'bg-red-500 hover:bg-red-600'
+                            } transition-colors`}
+                          >
+                            {user.is_active ? 'Suspend' : 'Suspend'}
+                          </button>
+                          {!user.is_staff && (
+                            <button
+                              onClick={() => handleMakeAdmin(user.id)}
+                              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+                            >
+                              Make Admin
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      {!user.is_staff && (
-                        <button
-                          onClick={() => handleSuspendUser(user.id)}
-                          className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600"
-                        >
-                          {user.is_active ? 'Suspend' : 'Activate'}
-                        </button>
-                      )}
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Comments Tab */}
+        {activeTab === 'comments' && (
+          <>
+            {/* Comment Search */}
+            <div className="bg-white p-6 rounded-xl shadow-sm mb-8 border border-gray-200">
+              <div className="flex flex-col sm:flex-row sm:items-end gap-4">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Search Comments</label>
+                  <input
+                    type="text"
+                    value={commentSearchTerm}
+                    onChange={(e) => setCommentSearchTerm(e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-400"
+                    placeholder="Search comment content..."
+                  />
+                </div>
+                <button
+                  onClick={handleCommentSearch}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors"
+                >
+                  Search
+                </button>
               </div>
-            )}
-          </div>
-        </>
-      )}
+            </div>
+
+            {/* Comments List */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+              <h2 className="text-2xl font-semibold mb-6 text-gray-900">Recent Comments</h2>
+              {isLoading ? (
+                <div className="text-center py-10 text-gray-600">Loading comments...</div>
+              ) : comments.length === 0 ? (
+                <div className="text-center py-10 text-gray-600">No comments found</div>
+              ) : (
+                <div className="space-y-6">
+                  {comments.map(comment => (
+                    <div key={comment.id} className="border-b border-gray-200 pb-6 last:border-b-0">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-3 mb-2">
+                            {comment.user.profile?.profile_picture && (
+                              <img 
+                                src={comment.user.profile.profile_picture} 
+                                alt="Profile" 
+                                className="w-10 h-10 rounded-full object-cover"
+                              />
+                            )}
+                            <div>
+                              <Link href={`/profile/${comment.user.id}`} className="font-semibold text-gray-900 hover:text-blue-600 transition-colors">
+                                {comment.user.username}
+                              </Link>
+                              <span className="text-sm text-gray-500 ml-2">
+                                {new Date(comment.created_at).toLocaleString()}
+                              </span>
+                            </div>
+                          </div>
+                          <p className="text-gray-700 mt-2 whitespace-pre-wrap break-words">
+                            {comment.content}
+                          </p>
+                          <Link 
+                            href={`/articles/${comment.article.id}`} 
+                            className="text-sm text-blue-600 hover:underline mt-2 block"
+                          >
+                            On article: {comment.article.title}
+                          </Link>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteComment(comment.id)}
+                          className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
