@@ -5,11 +5,13 @@ import Navbar from '../../components/Navbar';
 import Link from 'next/link';
 import Image from 'next/image';
 import PropTypes from 'prop-types';
+import { marked } from 'marked'; // Add marked for Markdown rendering
 
 export default function AdminDashboard() {
   const router = useRouter();
   const API_URL = 'https://haseebclan.pythonanywhere.com/api';
   const textareaRef = useRef(null);
+  const previewRef = useRef(null);
 
   // State management
   const [activeTab, setActiveTab] = useState('articles');
@@ -42,7 +44,29 @@ export default function AdminDashboard() {
   const [isEditing, setIsEditing] = useState({ article: false, category: false });
   const [currentId, setCurrentId] = useState({ article: null, category: null });
 
-  // Auth check
+  // Auth check and token refresh
+  const refreshToken = useCallback(async () => {
+    try {
+      const refresh = localStorage.getItem('refresh_token');
+      if (!refresh) throw new Error('No refresh token available');
+      const response = await fetch(`${API_URL}/token/refresh/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh }),
+      });
+      if (!response.ok) throw new Error('Failed to refresh token');
+      const data = await response.json();
+      localStorage.setItem('access_token', data.access);
+      return data.access;
+    } catch (err) {
+      setError('Session expired. Please log in again.');
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      router.push('/login');
+      return null;
+    }
+  }, [router]);
+
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('user'));
     if (!user || !user.is_staff) {
@@ -50,13 +74,13 @@ export default function AdminDashboard() {
       return;
     }
     fetchStats();
-  }, [router]);
+  }, [router, refreshToken]);
 
   // Memoized fetch functions
   const fetchStats = useCallback(async () => {
     setIsLoading(true);
     try {
-      const token = localStorage.getItem('access_token');
+      let token = localStorage.getItem('access_token');
       const responses = await Promise.all([
         fetch(`${API_URL}/articles/`, { headers: { Authorization: `Bearer ${token}` } }),
         fetch(`${API_URL}/users/`, { headers: { Authorization: `Bearer ${token}` } }),
@@ -64,9 +88,21 @@ export default function AdminDashboard() {
         fetch(`${API_URL}/categories/`, { headers: { Authorization: `Bearer ${token}` } }),
       ]);
 
+      // Check for 401 and refresh token if needed
+      if (responses.some((r) => r.status === 401)) {
+        token = await refreshToken();
+        if (!token) throw new Error('Authentication failed');
+        responses = await Promise.all([
+          fetch(`${API_URL}/articles/`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`${API_URL}/users/`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`${API_URL}/comments/`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`${API_URL}/categories/`, { headers: { Authorization: `Bearer ${token}` } }),
+        ]);
+      }
+
       const [articlesData, usersData, commentsData, categoriesData] = await Promise.all(
         responses.map(async (r) => {
-          if (!r.ok) throw new Error(`Failed to fetch ${r.url}`);
+          if (!r.ok) throw new Error(`Failed to fetch ${r.url}: ${r.statusText}`);
           return r.json();
         })
       );
@@ -78,22 +114,33 @@ export default function AdminDashboard() {
         totalCategories: categoriesData.length || 0,
       });
     } catch (err) {
-      setError('Failed to fetch statistics');
+      setError(err.message || 'Failed to fetch statistics');
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [refreshToken]);
 
   const fetchData = useCallback(async (endpoint, search = '') => {
     setIsLoading(true);
     try {
-      const token = localStorage.getItem('access_token');
-      const url = search ? `${API_URL}/${endpoint}/?search=${encodeURIComponent(search)}` : `${API_URL}/${endpoint}/`;
-      const response = await fetch(url, {
+      let token = localStorage.getItem('access_token');
+      const url = search ? `${API_URL}/${endpoint}/?${search}` : `${API_URL}/${endpoint}/`;
+      let response = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!response.ok) throw new Error(`Failed to fetch ${endpoint}`);
+      if (response.status === 401) {
+        token = await refreshToken();
+        if (!token) throw new Error('Authentication failed');
+        response = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to fetch ${endpoint}: ${response.statusText}`);
+      }
       const data = await response.json();
       return Array.isArray(data) ? data : data.results || [];
     } catch (err) {
@@ -102,24 +149,29 @@ export default function AdminDashboard() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [refreshToken]);
 
   // Tab data fetching
   useEffect(() => {
     const fetchTabData = async () => {
       switch (activeTab) {
         case 'articles':
-          setArticles(await fetchData('articles', selectedCategory ? `category=${selectedCategory}&search=${searchTerm}` : searchTerm));
+          setArticles(
+            await fetchData(
+              'articles',
+              selectedCategory ? `category=${selectedCategory}&search=${encodeURIComponent(searchTerm)}` : `search=${encodeURIComponent(searchTerm)}`
+            )
+          );
           setCategories(await fetchData('categories'));
           break;
         case 'categories':
           setCategories(await fetchData('categories'));
           break;
         case 'users':
-          setUsers(await fetchData('users', userSearchTerm));
+          setUsers(await fetchData('users', `search=${encodeURIComponent(userSearchTerm)}`));
           break;
         case 'comments':
-          setComments(await fetchData('comments', commentSearchTerm));
+          setComments(await fetchData('comments', `search=${encodeURIComponent(commentSearchTerm)}`));
           break;
         default:
           break;
@@ -137,7 +189,7 @@ export default function AdminDashboard() {
     setSuccess('');
 
     try {
-      const token = localStorage.getItem('access_token');
+      let token = localStorage.getItem('access_token');
       const isEdit = isEditing[type];
       const id = currentId[type];
       let url = `${API_URL}/${type}s/`;
@@ -156,7 +208,7 @@ export default function AdminDashboard() {
         url = isEdit ? `${url}${id}/` : url;
       }
 
-      const response = await fetch(url, {
+      let response = await fetch(url, {
         method: isEdit ? 'PUT' : 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -165,16 +217,32 @@ export default function AdminDashboard() {
         body,
       });
 
+      if (response.status === 401) {
+        token = await refreshToken();
+        if (!token) throw new Error('Authentication failed');
+        response = await fetch(url, {
+          method: isEdit ? 'PUT' : 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            ...(type === 'category' && { 'Content-Type': 'application/json' }),
+          },
+          body,
+        });
+      }
+
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || `Failed to ${isEdit ? 'update' : 'create'} ${type}`);
+        throw new Error(errorData.detail || errorData.message || `Failed to ${isEdit ? 'update' : 'create'} ${type}`);
       }
 
       setSuccess(`${type.charAt(0).toUpperCase() + type.slice(1)} ${isEdit ? 'updated' : 'created'} successfully!`);
       resetForm(type);
       fetchStats();
-      if (type === 'article') fetchData('articles', selectedCategory ? `category=${selectedCategory}&search=${searchTerm}` : searchTerm);
-      else fetchData('categories');
+      if (type === 'article') {
+        fetchData('articles', selectedCategory ? `category=${selectedCategory}&search=${searchTerm}` : `search=${searchTerm}`);
+      } else {
+        fetchData('categories');
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -212,19 +280,36 @@ export default function AdminDashboard() {
     if (!window.confirm(`Are you sure you want to delete this ${type}?`)) return;
 
     try {
-      const token = localStorage.getItem('access_token');
-      const response = await fetch(`${API_URL}/${type}s/${id}/`, {
+      let token = localStorage.getItem('access_token');
+      const url = `${API_URL}/${type}s/${id}/`;
+      let response = await fetch(url, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!response.ok) throw new Error(`Failed to delete ${type}`);
+      if (response.status === 401) {
+        token = await refreshToken();
+        if (!token) throw new Error('Authentication failed');
+        response = await fetch(url, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || errorData.message || `Failed to delete ${type}`);
+      }
 
       setSuccess(`${type.charAt(0).toUpperCase() + type.slice(1)} deleted successfully!`);
       fetchStats();
-      if (type === 'article') fetchData('articles', selectedCategory ? `category=${selectedCategory}&search=${searchTerm}` : searchTerm);
-      else if (type === 'category') fetchData('categories');
-      else fetchData(`${type}s`);
+      if (type === 'article') {
+        fetchData('articles', selectedCategory ? `category=${selectedCategory}&search=${searchTerm}` : `search=${searchTerm}`);
+      } else if (type === 'category') {
+        fetchData('categories');
+      } else {
+        fetchData(`${type}s`);
+      }
     } catch (err) {
       setError(err.message);
     }
@@ -232,11 +317,20 @@ export default function AdminDashboard() {
 
   const handleMakeAdmin = async (userId) => {
     try {
-      const token = localStorage.getItem('access_token');
-      const response = await fetch(`${API_URL}/users/${userId}/make-admin/`, {
+      let token = localStorage.getItem('access_token');
+      let response = await fetch(`${API_URL}/users/${userId}/make-admin/`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
+
+      if (response.status === 401) {
+        token = await refreshToken();
+        if (!token) throw new Error('Authentication failed');
+        response = await fetch(`${API_URL}/users/${userId}/make-admin/`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -244,7 +338,7 @@ export default function AdminDashboard() {
       }
 
       setSuccess('User role updated successfully!');
-      fetchData('users', userSearchTerm);
+      fetchData('users', `search=${encodeURIComponent(userSearchTerm)}`);
       fetchStats();
     } catch (err) {
       setError(err.message);
@@ -253,11 +347,20 @@ export default function AdminDashboard() {
 
   const handleSuspendUser = async (userId) => {
     try {
-      const token = localStorage.getItem('access_token');
-      const response = await fetch(`${API_URL}/suspend-user/${userId}/`, {
+      let token = localStorage.getItem('access_token');
+      let response = await fetch(`${API_URL}/suspend-user/${userId}/`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
+
+      if (response.status === 401) {
+        token = await refreshToken();
+        if (!token) throw new Error('Authentication failed');
+        response = await fetch(`${API_URL}/suspend-user/${userId}/`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -265,7 +368,7 @@ export default function AdminDashboard() {
       }
 
       setSuccess('User status updated successfully!');
-      fetchData('users', userSearchTerm);
+      fetchData('users', `search=${encodeURIComponent(userSearchTerm)}`);
       fetchStats();
     } catch (err) {
       setError(err.message);
@@ -279,7 +382,7 @@ export default function AdminDashboard() {
 
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    const selectedText = articleForm.content.substring(start, end) || ' ';
+    const selectedText = articleForm.content.substring(start, end) || 'Text';
 
     let formattedText;
     switch (type) {
@@ -307,6 +410,11 @@ export default function AdminDashboard() {
     setArticleForm({ ...articleForm, content: newContent });
     textarea.focus();
     textarea.setSelectionRange(start, start + formattedText.length);
+
+    // Update preview
+    if (previewRef.current) {
+      previewRef.current.innerHTML = marked(newContent, { sanitize: true });
+    }
   };
 
   // UI Components
@@ -442,10 +550,23 @@ export default function AdminDashboard() {
                       <textarea
                         ref={textareaRef}
                         value={articleForm.content}
-                        onChange={(e) => setArticleForm({ ...articleForm, content: e.target.value })}
+                        onChange={(e) => {
+                          setArticleForm({ ...articleForm, content: e.target.value });
+                          if (previewRef.current) {
+                            previewRef.current.innerHTML = marked(e.target.value, { sanitize: true });
+                          }
+                        }}
                         className="w-full p-3 border border-gray-300 rounded-md min-h-[200px] text-base focus:ring-2 focus:ring-blue-500"
                         required
                         aria-label="Article content"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-base font-medium text-gray-700 mb-2">Preview</label>
+                      <div
+                        ref={previewRef}
+                        className="w-full p-3 border border-gray-300 rounded-md min-h-[200px] text-base bg-gray-50 prose"
+                        dangerouslySetInnerHTML={{ __html: marked(articleForm.content, { sanitize: true }) }}
                       />
                     </div>
                     <div>
@@ -522,7 +643,10 @@ export default function AdminDashboard() {
                         <div className="flex flex-col sm:flex-row justify-between gap-4">
                           <div className="flex-1">
                             <h3 className="font-semibold text-lg">{article.title}</h3>
-                            <p className="text-base text-gray-600 mt-2 line-clamp-3">{article.content}</p>
+                            <div
+                              className="text-base text-gray-600 mt-2 line-clamp-3 prose"
+                              dangerouslySetInnerHTML={{ __html: marked(article.content, { sanitize: true }) }}
+                            />
                             <div className="flex flex-wrap gap-3 mt-3">
                               <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded text-sm">
                                 {article.category?.name || 'No Category'}
