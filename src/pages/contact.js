@@ -75,7 +75,7 @@ export default function Contact() {
               </div>
               <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4">Get In Touch</h1>
               <p className="text-sm sm:text-lg">
-                Have questions or suggestions? We'd love to hear from you!
+                Have questions or suggestions? We&apos;d love to hear from you!
               </p>
             </div>
           </div>

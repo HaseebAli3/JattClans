@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Navbar from '../../components/Navbar';
 import Link from 'next/link';
+import Image from 'next/image';
+
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -823,7 +825,7 @@ export default function AdminDashboard() {
                       <div className="flex justify-between items-center">
                         <div className="flex items-center space-x-4">
                           {user.profile?.profile_picture && (
-                            <img 
+                            <Image
                               src={user.profile.profile_picture} 
                               alt="Profile" 
                               className="w-12 h-12 rounded-full object-cover"
@@ -914,7 +916,7 @@ export default function AdminDashboard() {
                         <div className="flex-1">
                           <div className="flex items-center space-x-3 mb-2">
                             {comment.user.profile?.profile_picture && (
-                              <img 
+                              <Image 
                                 src={comment.user.profile.profile_picture} 
                                 alt="Profile" 
                                 className="w-10 h-10 rounded-full object-cover"

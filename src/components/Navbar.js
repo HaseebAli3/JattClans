@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
+
 import { 
   FaSignOutAlt, 
   FaUser, 
@@ -196,7 +198,7 @@ export default function Navbar({ currentPage }) {
         {user && (
           <div className="p-4 border-b border-teal-600 flex items-center space-x-3">
             {user.profile?.profile_picture ? (
-              <img 
+              <Image
                 src={user.profile.profile_picture} 
                 alt="Profile" 
                 className="h-12 w-12 rounded-full object-cover"

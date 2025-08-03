@@ -5,6 +5,8 @@ import Head from 'next/head';
 import { FaSearch, FaUser, FaComment, FaThumbsUp, FaEye, FaArrowLeft, FaArrowRight } from 'react-icons/fa';
 import Link from 'next/link';
 import Navbar from '../../components/Navbar';
+import Image from 'next/image';
+
 
 export default function ArticlesPage() {
   const [articles, setArticles] = useState([]);
@@ -116,7 +118,7 @@ export default function ArticlesPage() {
                 >
                   {article.thumbnail && (
                     <div className="relative h-32 w-full">
-                      <img
+                      <Image
                         src={article.thumbnail}
                         alt={article.title}
                         className="w-full h-full object-cover"

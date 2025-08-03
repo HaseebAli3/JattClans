@@ -128,7 +128,7 @@ export default function Login() {
             </form>
 
             <div className="mt-4 text-center text-teal-700 text-base">
-              Don't have an account?{' '}
+              Don&apos;t have an account?{' '}
               <button 
                 onClick={() => router.push('/signup')} 
                 className="text-teal-800 font-semibold hover:underline hover:text-teal-900 transition-colors"
