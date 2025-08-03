@@ -52,47 +52,85 @@ export default function AdminDashboard() {
     }
   }, [router]);
 
-  // Improved fetch function with better error handling
-  const fetchData = useCallback(async (endpoint, params = {}) => {
-    setIsLoading(true);
-    setError('');
+  // Enhanced API request handler
+  const makeRequest = useCallback(async (url, method = 'GET', body = null, isFormData = false) => {
+    const token = localStorage.getItem('access_token');
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+    };
+
+    if (!isFormData) {
+      headers['Content-Type'] = 'application/json';
+    }
+
+    const config = {
+      method,
+      headers,
+    };
+
+    if (body) {
+      config.body = isFormData ? body : JSON.stringify(body);
+    }
+
     try {
-      const token = localStorage.getItem('access_token');
-      const queryString = new URLSearchParams(params).toString();
-      const url = `${API_URL}/${endpoint}/${queryString ? `?${queryString}` : ''}`;
-      
-      const response = await fetch(url, {
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-      });
+      const response = await fetch(url, config);
+
+      // Handle empty responses (like for DELETE requests)
+      if (response.status === 204) {
+        return { success: true };
+      }
 
       // Check if response is JSON
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
         const text = await response.text();
-        throw new Error(text || 'Invalid response from server');
+        return { 
+          success: false,
+          error: text || 'Invalid response from server'
+        };
       }
 
       const data = await response.json();
       
       if (!response.ok) {
-        throw new Error(data.detail || `Failed to fetch ${endpoint}`);
+        return {
+          success: false,
+          error: data.detail || `Request failed with status ${response.status}`
+        };
       }
 
-      return Array.isArray(data) ? data : data.results || [];
+      return { success: true, data };
     } catch (err) {
-      // Handle HTML error responses
-      const errorMsg = err.message.startsWith('<!DOCTYPE html>') 
-        ? 'Server error occurred' 
-        : err.message;
-      setError(errorMsg);
+      return {
+        success: false,
+        error: err.message
+      };
+    }
+  }, []);
+
+  // Fetch data function
+  const fetchData = useCallback(async (endpoint, params = {}) => {
+    setIsLoading(true);
+    setError('');
+    
+    try {
+      const queryString = new URLSearchParams(params).toString();
+      const url = `${API_URL}/${endpoint}/${queryString ? `?${queryString}` : ''}`;
+      
+      const result = await makeRequest(url);
+      
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      return Array.isArray(result.data) ? result.data : result.data.results || [];
+    } catch (err) {
+      setError(err.message);
       return [];
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [makeRequest]);
 
   // Fetch stats function
   const fetchStats = useCallback(async () => {
@@ -105,10 +143,10 @@ export default function AdminDashboard() {
       ]);
 
       setStats({
-        totalArticles: articlesRes.length || 0,
-        totalUsers: usersRes.length || 0,
-        totalComments: commentsRes.length || 0,
-        totalCategories: categoriesRes.length || 0,
+        totalArticles: articlesRes?.length || 0,
+        totalUsers: usersRes?.length || 0,
+        totalComments: commentsRes?.length || 0,
+        totalCategories: categoriesRes?.length || 0,
       });
     } catch (err) {
       setError('Failed to fetch statistics');
@@ -143,7 +181,7 @@ export default function AdminDashboard() {
     fetchTabData();
   }, [activeTab, searchTerm, selectedCategory, userSearchTerm, commentSearchTerm, fetchData]);
 
-  // Form submission handler with improved error handling
+  // Form submission handler
   const handleSubmit = async (type, e) => {
     e.preventDefault();
     setIsLoading(true);
@@ -151,15 +189,12 @@ export default function AdminDashboard() {
     setSuccess('');
 
     try {
-      const token = localStorage.getItem('access_token');
       const isEdit = isEditing[type];
       const id = currentId[type];
-      let url = `${API_URL}/${type}s/${isEdit ? `${id}/` : ''}`;
+      const url = `${API_URL}/${type}s/${isEdit ? `${id}/` : ''}`;
       
       let body;
-      const headers = {
-        'Authorization': `Bearer ${token}`,
-      };
+      let isFormData = false;
 
       if (type === 'article') {
         const formData = new FormData();
@@ -168,31 +203,16 @@ export default function AdminDashboard() {
         if (articleForm.category_id) formData.append('category_id', articleForm.category_id);
         if (articleForm.thumbnail) formData.append('thumbnail', articleForm.thumbnail);
         body = formData;
-        // Don't set Content-Type for FormData - the browser will set it with the correct boundary
-        delete headers['Content-Type'];
+        isFormData = true;
       } else {
-        headers['Content-Type'] = 'application/json';
-        body = JSON.stringify({ name: categoryForm.name });
+        body = { name: categoryForm.name };
       }
 
       const method = isEdit ? 'PUT' : 'POST';
-      const response = await fetch(url, {
-        method,
-        headers,
-        body,
-      });
+      const result = await makeRequest(url, method, body, isFormData);
 
-      // Check response content type
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        const text = await response.text();
-        throw new Error(text || 'Invalid response from server');
-      }
-
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        throw new Error(responseData.detail || `Failed to ${isEdit ? 'update' : 'create'} ${type}`);
+      if (!result.success) {
+        throw new Error(result.error);
       }
 
       setSuccess(`${type.charAt(0).toUpperCase() + type.slice(1)} ${isEdit ? 'updated' : 'created'} successfully!`);
@@ -209,11 +229,7 @@ export default function AdminDashboard() {
         setCategories(await fetchData('categories'));
       }
     } catch (err) {
-      // Handle HTML error responses
-      const errorMsg = err.message.startsWith('<!DOCTYPE html>') 
-        ? 'Server error occurred' 
-        : err.message;
-      setError(errorMsg);
+      setError(err.message);
     } finally {
       setIsLoading(false);
     }
@@ -245,23 +261,15 @@ export default function AdminDashboard() {
     setCurrentId(prev => ({ ...prev, [type]: item.id }));
   };
 
-  // Improved delete handler with proper headers
   const handleDelete = async (type, id) => {
     if (!window.confirm(`Are you sure you want to delete this ${type}?`)) return;
 
     try {
-      const token = localStorage.getItem('access_token');
-      const response = await fetch(`${API_URL}/${type}s/${id}/`, {
-        method: 'DELETE',
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-      });
+      const url = `${API_URL}/${type}s/${id}/`;
+      const result = await makeRequest(url, 'DELETE');
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || `Failed to delete ${type}`);
+      if (!result.success) {
+        throw new Error(result.error);
       }
 
       setSuccess(`${type.charAt(0).toUpperCase() + type.slice(1)} deleted successfully!`);
@@ -285,18 +293,11 @@ export default function AdminDashboard() {
     if (!window.confirm('Are you sure you want to make this user an admin?')) return;
 
     try {
-      const token = localStorage.getItem('access_token');
-      const response = await fetch(`${API_URL}/users/${userId}/make-admin/`, {
-        method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-      });
+      const url = `${API_URL}/users/${userId}/make-admin/`;
+      const result = await makeRequest(url, 'POST');
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to make user admin');
+      if (!result.success) {
+        throw new Error(result.error);
       }
 
       setSuccess('User promoted to admin successfully!');
@@ -312,18 +313,11 @@ export default function AdminDashboard() {
     if (!window.confirm(`Are you sure you want to ${action} this user?`)) return;
 
     try {
-      const token = localStorage.getItem('access_token');
-      const response = await fetch(`${API_URL}/suspend-user/${userId}/`, {
-        method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-      });
+      const url = `${API_URL}/suspend-user/${userId}/`;
+      const result = await makeRequest(url, 'POST');
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Failed to ${action} user`);
+      if (!result.success) {
+        throw new Error(result.error);
       }
 
       setSuccess(`User ${action}ed successfully!`);
@@ -334,7 +328,7 @@ export default function AdminDashboard() {
     }
   };
 
-  // UI Components with improved contrast
+  // UI Components
   const StatsCard = ({ title, value }) => (
     <div className="bg-white rounded-lg shadow p-4 flex-1 min-w-[120px]">
       <h3 className="text-sm font-medium text-gray-700">{title}</h3>
