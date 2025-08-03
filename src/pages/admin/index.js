@@ -1,16 +1,13 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
 import Image from 'next/image';
 import Navbar from '../../components/Navbar';
-import PropTypes from 'prop-types';
-import { marked } from 'marked';
 
 export default function AdminDashboard() {
   const router = useRouter();
   const API_URL = 'https://haseebclan.pythonanywhere.com/api';
-  const editorRef = useRef(null);
 
   // State management
   const [activeTab, setActiveTab] = useState('articles');
@@ -55,26 +52,29 @@ export default function AdminDashboard() {
     }
   }, [router]);
 
-  // Memoized fetch functions
+  // Fetch data functions
   const fetchStats = useCallback(async () => {
     try {
       const token = localStorage.getItem('access_token');
-      const responses = await Promise.all([
+      const [articlesRes, usersRes, commentsRes, categoriesRes] = await Promise.all([
         fetch(`${API_URL}/articles/`, { headers: { Authorization: `Bearer ${token}` } }),
         fetch(`${API_URL}/users/`, { headers: { Authorization: `Bearer ${token}` } }),
         fetch(`${API_URL}/comments/`, { headers: { Authorization: `Bearer ${token}` } }),
         fetch(`${API_URL}/categories/`, { headers: { Authorization: `Bearer ${token}` } }),
       ]);
 
-      const [articlesData, usersData, commentsData, categoriesData] = await Promise.all(
-        responses.map(r => r.json())
-      );
+      const statsData = await Promise.all([
+        articlesRes.json(),
+        usersRes.json(),
+        commentsRes.json(),
+        categoriesRes.json(),
+      ]);
 
       setStats({
-        totalArticles: articlesData.length || 0,
-        totalUsers: usersData.length || 0,
-        totalComments: commentsData.length || 0,
-        totalCategories: categoriesData.length || 0,
+        totalArticles: statsData[0].length || 0,
+        totalUsers: statsData[1].length || 0,
+        totalComments: statsData[2].length || 0,
+        totalCategories: statsData[3].length || 0,
       });
     } catch (err) {
       setError('Failed to fetch statistics');
@@ -92,8 +92,11 @@ export default function AdminDashboard() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!response.ok) throw new Error(`Failed to fetch ${endpoint}`);
-      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `Failed to fetch ${endpoint}`);
+      }
+
       const data = await response.json();
       return Array.isArray(data) ? data : data.results || [];
     } catch (err) {
@@ -132,51 +135,6 @@ export default function AdminDashboard() {
     fetchTabData();
   }, [activeTab, searchTerm, selectedCategory, userSearchTerm, commentSearchTerm, fetchData]);
 
-  // Formatting handlers
-  const addFormatting = (type) => {
-    const textarea = editorRef.current;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selectedText = articleForm.content.substring(start, end) || 'sample text';
-
-    let formattedText;
-    switch (type) {
-      case 'heading':
-        formattedText = `# ${selectedText}\n`;
-        break;
-      case 'subheading':
-        formattedText = `## ${selectedText}\n`;
-        break;
-      case 'bold':
-        formattedText = `**${selectedText}**`;
-        break;
-      case 'italic':
-        formattedText = `*${selectedText}*`;
-        break;
-      case 'link':
-        formattedText = `[${selectedText}](url)`;
-        break;
-      case 'list':
-        formattedText = `- ${selectedText}\n- List item`;
-        break;
-      default:
-        formattedText = selectedText;
-    }
-
-    const newContent =
-      articleForm.content.substring(0, start) +
-      formattedText +
-      articleForm.content.substring(end);
-
-    setArticleForm({ ...articleForm, content: newContent });
-    textarea.focus();
-    setTimeout(() => {
-      textarea.setSelectionRange(start, start + formattedText.length);
-    }, 0);
-  };
-
   // Form handlers
   const handleSubmit = async (type, e) => {
     e.preventDefault();
@@ -189,8 +147,7 @@ export default function AdminDashboard() {
       const isEdit = isEditing[type];
       const id = currentId[type];
       let url = `${API_URL}/${type}s/${isEdit ? `${id}/` : ''}`;
-      const method = isEdit ? 'PUT' : 'POST';
-
+      
       let body;
       const headers = {
         'Authorization': `Bearer ${token}`,
@@ -208,6 +165,7 @@ export default function AdminDashboard() {
         body = JSON.stringify({ name: categoryForm.name });
       }
 
+      const method = isEdit ? 'PUT' : 'POST';
       const response = await fetch(url, {
         method,
         headers,
@@ -216,14 +174,15 @@ export default function AdminDashboard() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.detail || errorData.message || `Failed to ${isEdit ? 'update' : 'create'} ${type}`);
+        throw new Error(errorData.detail || `Failed to ${isEdit ? 'update' : 'create'} ${type}`);
       }
 
+      const responseData = await response.json();
       setSuccess(`${type.charAt(0).toUpperCase() + type.slice(1)} ${isEdit ? 'updated' : 'created'} successfully!`);
       resetForm(type);
       fetchStats();
       
-      // Refresh the current tab data
+      // Refresh current tab data
       if (type === 'article') {
         setArticles(await fetchData('articles', { 
           search: searchTerm, 
@@ -283,7 +242,7 @@ export default function AdminDashboard() {
       setSuccess(`${type.charAt(0).toUpperCase() + type.slice(1)} deleted successfully!`);
       fetchStats();
       
-      // Refresh the current tab data
+      // Refresh current tab data
       if (type === 'article') {
         setArticles(await fetchData('articles', { 
           search: searchTerm, 
@@ -291,8 +250,6 @@ export default function AdminDashboard() {
         }));
       } else if (type === 'category') {
         setCategories(await fetchData('categories'));
-      } else if (type === 'comment') {
-        setComments(await fetchData('comments', { search: commentSearchTerm }));
       }
     } catch (err) {
       setError(err.message);
@@ -354,11 +311,6 @@ export default function AdminDashboard() {
     </div>
   );
 
-  StatsCard.propTypes = {
-    title: PropTypes.string.isRequired,
-    value: PropTypes.number.isRequired,
-  };
-
   const TabButton = ({ tab }) => (
     <button
       type="button"
@@ -372,10 +324,6 @@ export default function AdminDashboard() {
       {tab.charAt(0).toUpperCase() + tab.slice(1)}
     </button>
   );
-
-  TabButton.propTypes = {
-    tab: PropTypes.string.isRequired,
-  };
 
   return (
     <>
@@ -425,21 +373,6 @@ export default function AdminDashboard() {
                 <h2 className="text-xl font-semibold mb-4">
                   {isEditing.article ? 'Edit Article' : 'Create Article'}
                 </h2>
-                
-                {/* Formatting Toolbar */}
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {['bold', 'italic', 'heading', 'subheading', 'link', 'list'].map(format => (
-                    <button
-                      key={format}
-                      type="button"
-                      onClick={() => addFormatting(format)}
-                      className="px-3 py-1 bg-gray-100 text-gray-800 rounded-md text-sm hover:bg-gray-200"
-                    >
-                      {format.charAt(0).toUpperCase() + format.slice(1)}
-                    </button>
-                  ))}
-                </div>
-                
                 <form onSubmit={(e) => handleSubmit('article', e)}>
                   <div className="grid gap-4 mb-4">
                     <div>
@@ -467,20 +400,12 @@ export default function AdminDashboard() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Content (Markdown supported)</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Content</label>
                       <textarea
-                        ref={editorRef}
                         value={articleForm.content}
                         onChange={(e) => setArticleForm({...articleForm, content: e.target.value})}
                         className="w-full p-2 border border-gray-300 rounded-md min-h-[200px]"
                         required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Preview</label>
-                      <div 
-                        className="w-full p-2 border border-gray-300 rounded-md min-h-[200px] bg-gray-50 prose"
-                        dangerouslySetInnerHTML={{ __html: marked(articleForm.content || 'Preview will appear here') }}
                       />
                     </div>
                     <div>
@@ -550,10 +475,9 @@ export default function AdminDashboard() {
                         <div className="flex flex-col sm:flex-row justify-between gap-4">
                           <div className="flex-1">
                             <h3 className="font-medium">{article.title}</h3>
-                            <div 
-                              className="text-sm text-gray-600 mt-1 line-clamp-2 prose" 
-                              dangerouslySetInnerHTML={{ __html: marked(article.content.substring(0, 200)) }} 
-                            />
+                            <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                              {article.content.substring(0, 200)}...
+                            </p>
                             <div className="flex flex-wrap gap-2 mt-2 text-xs">
                               <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
                                 {article.category?.name || 'No Category'}
@@ -687,14 +611,14 @@ export default function AdminDashboard() {
                     <div key={user.id} className="border-b border-gray-200 pb-4 last:border-b-0">
                       <div className="flex items-center gap-3">
                         {user.profile?.profile_picture && (
-                          <div className="relative w-10 h-10">
+                          <Link href={`/profile/${user.id}`} className="relative w-10 h-10">
                             <Image
                               src={user.profile.profile_picture}
                               alt="Profile"
                               fill
                               className="rounded-full object-cover"
                             />
-                          </div>
+                          </Link>
                         )}
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
@@ -768,14 +692,14 @@ export default function AdminDashboard() {
                     <div key={comment.id} className="border-b border-gray-200 pb-4 last:border-b-0">
                       <div className="flex gap-3">
                         {comment.user.profile?.profile_picture && (
-                          <div className="relative w-10 h-10 flex-shrink-0">
+                          <Link href={`/profile/${comment.user.id}`} className="relative w-10 h-10 flex-shrink-0">
                             <Image
                               src={comment.user.profile.profile_picture}
                               alt="Profile"
                               fill
                               className="rounded-full object-cover"
                             />
-                          </div>
+                          </Link>
                         )}
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
@@ -812,7 +736,3 @@ export default function AdminDashboard() {
     </>
   );
 }
-
-AdminDashboard.propTypes = {
-  // Add prop types if needed
-};
