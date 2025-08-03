@@ -4,6 +4,7 @@ import Head from 'next/head';
 import Navbar from '../../components/Navbar';
 import Link from 'next/link';
 import Image from 'next/image';
+import PropTypes from 'prop-types';
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -46,13 +47,14 @@ export default function AdminDashboard() {
     const user = JSON.parse(localStorage.getItem('user'));
     if (!user || !user.is_staff) {
       router.push('/articles');
-    } else {
-      fetchStats();
+      return;
     }
+    fetchStats();
   }, [router]);
 
   // Memoized fetch functions
   const fetchStats = useCallback(async () => {
+    setIsLoading(true);
     try {
       const token = localStorage.getItem('access_token');
       const responses = await Promise.all([
@@ -77,6 +79,8 @@ export default function AdminDashboard() {
       });
     } catch (err) {
       setError('Failed to fetch statistics');
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
@@ -90,7 +94,6 @@ export default function AdminDashboard() {
       });
 
       if (!response.ok) throw new Error(`Failed to fetch ${endpoint}`);
-
       const data = await response.json();
       return Array.isArray(data) ? data : data.results || [];
     } catch (err) {
@@ -106,7 +109,7 @@ export default function AdminDashboard() {
     const fetchTabData = async () => {
       switch (activeTab) {
         case 'articles':
-          setArticles(await fetchData('articles', searchTerm));
+          setArticles(await fetchData('articles', selectedCategory ? `category=${selectedCategory}&search=${searchTerm}` : searchTerm));
           setCategories(await fetchData('categories'));
           break;
         case 'categories':
@@ -124,7 +127,7 @@ export default function AdminDashboard() {
     };
 
     fetchTabData();
-  }, [activeTab, searchTerm, userSearchTerm, commentSearchTerm, fetchData]);
+  }, [activeTab, searchTerm, selectedCategory, userSearchTerm, commentSearchTerm, fetchData]);
 
   // Form handlers
   const handleSubmit = async (type, e) => {
@@ -144,7 +147,7 @@ export default function AdminDashboard() {
         const formData = new FormData();
         formData.append('title', articleForm.title);
         formData.append('content', articleForm.content);
-        formData.append('category_id', articleForm.category_id);
+        if (articleForm.category_id) formData.append('category_id', articleForm.category_id);
         if (articleForm.thumbnail) formData.append('thumbnail', articleForm.thumbnail);
         body = formData;
         url = isEdit ? `${url}${id}/` : url;
@@ -170,7 +173,7 @@ export default function AdminDashboard() {
       setSuccess(`${type.charAt(0).toUpperCase() + type.slice(1)} ${isEdit ? 'updated' : 'created'} successfully!`);
       resetForm(type);
       fetchStats();
-      if (type === 'article') fetchData('articles', searchTerm);
+      if (type === 'article') fetchData('articles', selectedCategory ? `category=${selectedCategory}&search=${searchTerm}` : searchTerm);
       else fetchData('categories');
     } catch (err) {
       setError(err.message);
@@ -195,7 +198,7 @@ export default function AdminDashboard() {
       setArticleForm({
         title: item.title,
         content: item.content,
-        category_id: item.category.id.toString(),
+        category_id: item.category?.id?.toString() || '',
         thumbnail: null,
       });
     } else {
@@ -219,7 +222,7 @@ export default function AdminDashboard() {
 
       setSuccess(`${type.charAt(0).toUpperCase() + type.slice(1)} deleted successfully!`);
       fetchStats();
-      if (type === 'article') fetchData('articles', searchTerm);
+      if (type === 'article') fetchData('articles', selectedCategory ? `category=${selectedCategory}&search=${searchTerm}` : searchTerm);
       else if (type === 'category') fetchData('categories');
       else fetchData(`${type}s`);
     } catch (err) {
@@ -276,56 +279,67 @@ export default function AdminDashboard() {
 
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    const selectedText = articleForm.content.substring(start, end);
+    const selectedText = articleForm.content.substring(start, end) || ' ';
 
-    if (selectedText) {
-      let formattedText;
-      switch (type) {
-        case 'heading':
-          formattedText = `# ${selectedText}\n`;
-          break;
-        case 'subheading':
-          formattedText = `## ${selectedText}\n`;
-          break;
-        case 'paragraph':
-          formattedText = `${selectedText}\n\n`;
-          break;
-        default:
-          formattedText = selectedText;
-      }
-
-      const newContent = 
-        articleForm.content.substring(0, start) + 
-        formattedText + 
-        articleForm.content.substring(end);
-
-      setArticleForm({ ...articleForm, content: newContent });
-      textarea.focus();
-      textarea.setSelectionRange(start, start + formattedText.length);
+    let formattedText;
+    switch (type) {
+      case 'heading':
+        formattedText = `# ${selectedText}\n`;
+        break;
+      case 'subheading':
+        formattedText = `## ${selectedText}\n`;
+        break;
+      case 'paragraph':
+        formattedText = `${selectedText}\n\n`;
+        break;
+      case 'bold':
+        formattedText = `**${selectedText}**`;
+        break;
+      default:
+        formattedText = selectedText;
     }
+
+    const newContent =
+      articleForm.content.substring(0, start) +
+      formattedText +
+      articleForm.content.substring(end);
+
+    setArticleForm({ ...articleForm, content: newContent });
+    textarea.focus();
+    textarea.setSelectionRange(start, start + formattedText.length);
   };
 
   // UI Components
   const StatsCard = ({ title, value }) => (
-    <div className="bg-white rounded-lg shadow p-4 flex-1 min-w-[120px] sm:min-w-[150px]">
-      <h3 className="text-sm font-medium text-gray-600">{title}</h3>
-      <p className="text-xl sm:text-2xl font-bold text-blue-600 mt-1">{value}</p>
+    <div className="bg-white rounded-lg shadow p-4 flex-1 min-w-[120px]">
+      <h3 className="text-base font-medium text-gray-600">{title}</h3>
+      <p className="text-2xl font-bold text-blue-600 mt-2">{value}</p>
     </div>
   );
+
+  StatsCard.propTypes = {
+    title: PropTypes.string.isRequired,
+    value: PropTypes.number.isRequired,
+  };
 
   const TabButton = ({ tab }) => (
     <button
       type="button"
       onClick={() => setActiveTab(tab)}
-      className={`px-3 py-2 text-sm font-medium whitespace-nowrap ${
+      className={`px-4 py-2 text-base font-medium whitespace-nowrap transition-colors duration-200 ${
         activeTab === tab
-          ? 'border-b-2 border-blue-500 text-blue-600'
-          : 'text-gray-500 hover:text-gray-700'
+          ? 'border-b-2 border-blue-600 text-blue-700'
+          : 'text-gray-600 hover:text-gray-800'
       }`}
+      aria-label={`Switch to ${tab} tab`}
     >
       {tab.charAt(0).toUpperCase() + tab.slice(1)}
     </button>
   );
+
+  TabButton.propTypes = {
+    tab: PropTypes.string.isRequired,
+  };
 
   return (
     <>
@@ -334,15 +348,15 @@ export default function AdminDashboard() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 font-sans">
         <Navbar />
-        <main className="container mx-auto px-4 py-6 max-w-7xl">
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold mb-6 text-gray-800">
+        <main className="container mx-auto px-4 py-8 max-w-7xl">
+          <h1 className="text-3xl sm:text-4xl font-bold mb-8 text-gray-800">
             Admin Dashboard
           </h1>
 
           {/* Stats Section */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
             <StatsCard title="Total Articles" value={stats.totalArticles} />
             <StatsCard title="Total Users" value={stats.totalUsers} />
             <StatsCard title="Total Comments" value={stats.totalComments} />
@@ -350,7 +364,7 @@ export default function AdminDashboard() {
           </div>
 
           {/* Tabs Navigation */}
-          <div className="flex border-b border-gray-200 mb-6 overflow-x-auto scrollbar-hidden">
+          <div className="flex border-b border-gray-200 mb-8 overflow-x-auto scrollbar-hidden">
             {['articles', 'categories', 'users', 'comments'].map((tab) => (
               <TabButton key={tab} tab={tab} />
             ))}
@@ -358,65 +372,62 @@ export default function AdminDashboard() {
 
           {/* Status Messages */}
           {error && (
-            <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
-              <p className="text-red-700 text-sm">{error}</p>
+            <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded-md">
+              <p className="text-red-700 text-base">{error}</p>
             </div>
           )}
           {success && (
-            <div className="bg-green-50 border-l-4 border-green-500 p-4 mb-6">
-              <p className="text-green-700 text-sm">{success}</p>
+            <div className="bg-green-50 border-l-4 border-green-500 p-4 mb-6 rounded-md">
+              <p className="text-green-700 text-base">{success}</p>
             </div>
           )}
 
           {/* Articles Tab */}
           {activeTab === 'articles' && (
             <>
-              <div className="bg-white rounded-lg shadow p-4 sm:p-6 mb-6">
-                <h2 className="text-lg sm:text-xl font-semibold mb-4">
+              <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
+                <h2 className="text-2xl font-semibold mb-6">
                   {isEditing.article ? 'Edit Article' : 'Create Article'}
                 </h2>
-                <div className="mb-4 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => addFormatting('heading')}
-                    className="px-3 py-1 bg-blue-100 text-blue-800 rounded-md text-sm"
-                  >
-                    Heading
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => addFormatting('subheading')}
-                    className="px-3 py-1 bg-blue-100 text-blue-800 rounded-md text-sm"
-                  >
-                    Subheading
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => addFormatting('paragraph')}
-                    className="px-3 py-1 bg-blue-100 text-blue-800 rounded-md text-sm"
-                  >
-                    Paragraph
-                  </button>
+                <div className="mb-6 flex flex-wrap gap-2">
+                  {[
+                    { type: 'heading', label: 'Heading' },
+                    { type: 'subheading', label: 'Subheading' },
+                    { type: 'paragraph', label: 'Paragraph' },
+                    { type: 'bold', label: 'Bold' },
+                  ].map(({ type, label }) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => addFormatting(type)}
+                      className="px-4 py-2 bg-blue-100 text-blue-800 rounded-md text-base hover:bg-blue-200 transition-colors"
+                      aria-label={`Apply ${label} formatting`}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
                 <form onSubmit={(e) => handleSubmit('article', e)}>
-                  <div className="grid gap-4 mb-4">
+                  <div className="grid gap-6 mb-6">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                      <label className="block text-base font-medium text-gray-700 mb-2">Title</label>
                       <input
                         type="text"
                         value={articleForm.title}
                         onChange={(e) => setArticleForm({ ...articleForm, title: e.target.value })}
-                        className="w-full p-2 border border-gray-300 rounded-md text-sm"
+                        className="w-full p-3 border border-gray-300 rounded-md text-base focus:ring-2 focus:ring-blue-500"
                         required
+                        aria-label="Article title"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                      <label className="block text-base font-medium text-gray-700 mb-2">Category</label>
                       <select
                         value={articleForm.category_id}
                         onChange={(e) => setArticleForm({ ...articleForm, category_id: e.target.value })}
-                        className="w-full p-2 border border-gray-300 rounded-md text-sm"
+                        className="w-full p-3 border border-gray-300 rounded-md text-base focus:ring-2 focus:ring-blue-500"
                         required
+                        aria-label="Select article category"
                       >
                         <option value="">Select category</option>
                         {categories.map((cat) => (
@@ -427,31 +438,34 @@ export default function AdminDashboard() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Content</label>
+                      <label className="block text-base font-medium text-gray-700 mb-2">Content</label>
                       <textarea
                         ref={textareaRef}
                         value={articleForm.content}
                         onChange={(e) => setArticleForm({ ...articleForm, content: e.target.value })}
-                        className="w-full p-2 border border-gray-300 rounded-md min-h-[150px] text-sm"
+                        className="w-full p-3 border border-gray-300 rounded-md min-h-[200px] text-base focus:ring-2 focus:ring-blue-500"
                         required
+                        aria-label="Article content"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Thumbnail</label>
+                      <label className="block text-base font-medium text-gray-700 mb-2">Thumbnail</label>
                       <input
                         type="file"
                         onChange={(e) => setArticleForm({ ...articleForm, thumbnail: e.target.files[0] })}
-                        className="w-full p-2 border border-gray-300 rounded-md text-sm"
+                        className="w-full p-3 border border-gray-300 rounded-md text-base"
                         accept="image/*"
+                        aria-label="Upload article thumbnail"
                       />
                     </div>
                   </div>
-                  <div className="flex justify-end gap-2">
+                  <div className="flex justify-end gap-3">
                     {isEditing.article && (
                       <button
                         type="button"
                         onClick={() => resetForm('article')}
-                        className="px-4 py-2 bg-gray-500 text-white rounded-md text-sm"
+                        className="px-4 py-2 bg-gray-500 text-white rounded-md text-base hover:bg-gray-600 transition-colors"
+                        aria-label="Cancel article editing"
                       >
                         Cancel
                       </button>
@@ -459,7 +473,8 @@ export default function AdminDashboard() {
                     <button
                       type="submit"
                       disabled={isLoading}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md disabled:bg-blue-400 text-sm"
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md text-base disabled:bg-blue-400 hover:bg-blue-700 transition-colors"
+                      aria-label={isEditing.article ? 'Update article' : 'Create article'}
                     >
                       {isLoading ? 'Saving...' : isEditing.article ? 'Update' : 'Create'}
                     </button>
@@ -468,21 +483,23 @@ export default function AdminDashboard() {
               </div>
 
               {/* Articles List */}
-              <div className="bg-white rounded-lg shadow p-4 sm:p-6">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
-                  <h2 className="text-lg sm:text-xl font-semibold">Articles</h2>
-                  <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              <div className="bg-white rounded-lg shadow-lg p-6">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                  <h2 className="text-2xl font-semibold">Articles</h2>
+                  <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
                     <input
                       type="text"
                       placeholder="Search articles..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="p-2 border border-gray-300 rounded-md text-sm w-full sm:w-auto"
+                      className="p-3 border border-gray-300 rounded-md text-base w-full sm:w-64 focus:ring-2 focus:ring-blue-500"
+                      aria-label="Search articles"
                     />
                     <select
                       value={selectedCategory}
                       onChange={(e) => setSelectedCategory(e.target.value)}
-                      className="p-2 border border-gray-300 rounded-md text-sm w-full sm:w-auto"
+                      className="p-3 border border-gray-300 rounded-md text-base w-full sm:w-48 focus:ring-2 focus:ring-blue-500"
+                      aria-label="Filter by category"
                     >
                       <option value="">All Categories</option>
                       {categories.map((cat) => (
@@ -495,38 +512,40 @@ export default function AdminDashboard() {
                 </div>
 
                 {isLoading ? (
-                  <div className="text-center py-8 text-sm">Loading...</div>
+                  <div className="text-center py-8 text-base text-gray-600">Loading...</div>
                 ) : articles.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500 text-sm">No articles found</div>
+                  <div className="text-center py-8 text-gray-500 text-base">No articles found</div>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-6">
                     {articles.map((article) => (
-                      <div key={article.id} className="border-b border-gray-200 pb-4 last:border-b-0">
+                      <div key={article.id} className="border-b border-gray-200 pb-6 last:border-b-0">
                         <div className="flex flex-col sm:flex-row justify-between gap-4">
                           <div className="flex-1">
-                            <h3 className="font-medium text-sm sm:text-base">{article.title}</h3>
-                            <p className="text-sm text-gray-600 mt-1 line-clamp-2">{article.content}</p>
-                            <div className="flex flex-wrap gap-2 mt-2 text-xs">
-                              <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                                {article.category.name}
+                            <h3 className="font-semibold text-lg">{article.title}</h3>
+                            <p className="text-base text-gray-600 mt-2 line-clamp-3">{article.content}</p>
+                            <div className="flex flex-wrap gap-3 mt-3">
+                              <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded text-sm">
+                                {article.category?.name || 'No Category'}
                               </span>
-                              <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded">
+                              <span className="bg-gray-100 text-gray-800 px-3 py-1 rounded text-sm">
                                 {article.views} views
                               </span>
                             </div>
                           </div>
-                          <div className="flex gap-2 self-end sm:self-center">
+                          <div className="flex gap-3 self-end sm:self-center">
                             <button
                               type="button"
                               onClick={() => handleEdit('article', article)}
-                              className="px-3 py-1 bg-blue-100 text-blue-800 rounded-md text-sm"
+                              className="px-4 py-2 bg-blue-100 text-blue-800 rounded-md text-base hover:bg-blue-200 transition-colors"
+                              aria-label={`Edit article ${article.title}`}
                             >
                               Edit
                             </button>
                             <button
                               type="button"
                               onClick={() => handleDelete('article', article.id)}
-                              className="px-3 py-1 bg-red-100 text-red-800 rounded-md text-sm"
+                              className="px-4 py-2 bg-red-100 text-red-800 rounded-md text-base hover:bg-red-200 transition-colors"
+                              aria-label={`Delete article ${article.title}`}
                             >
                               Delete
                             </button>
@@ -543,27 +562,29 @@ export default function AdminDashboard() {
           {/* Categories Tab */}
           {activeTab === 'categories' && (
             <>
-              <div className="bg-white rounded-lg shadow p-4 sm:p-6 mb-6">
-                <h2 className="text-lg sm:text-xl font-semibold mb-4">
+              <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
+                <h2 className="text-2xl font-semibold mb-6">
                   {isEditing.category ? 'Edit Category' : 'Create Category'}
                 </h2>
                 <form onSubmit={(e) => handleSubmit('category', e)}>
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                  <div className="mb-6">
+                    <label className="block text-base font-medium text-gray-700 mb-2">Name</label>
                     <input
                       type="text"
                       value={categoryForm.name}
                       onChange={(e) => setCategoryForm({ name: e.target.value })}
-                      className="w-full p-2 border border-gray-300 rounded-md text-sm"
+                      className="w-full p-3 border border-gray-300 rounded-md text-base focus:ring-2 focus:ring-blue-500"
                       required
+                      aria-label="Category name"
                     />
                   </div>
-                  <div className="flex justify-end gap-2">
+                  <div className="flex justify-end gap-3">
                     {isEditing.category && (
                       <button
                         type="button"
                         onClick={() => resetForm('category')}
-                        className="px-4 py-2 bg-gray-500 text-white rounded-md text-sm"
+                        className="px-4 py-2 bg-gray-500 text-white rounded-md text-base hover:bg-gray-600 transition-colors"
+                        aria-label="Cancel category editing"
                       >
                         Cancel
                       </button>
@@ -571,7 +592,8 @@ export default function AdminDashboard() {
                     <button
                       type="submit"
                       disabled={isLoading}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md disabled:bg-blue-400 text-sm"
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md text-base disabled:bg-blue-400 hover:bg-blue-700 transition-colors"
+                      aria-label={isEditing.category ? 'Update category' : 'Create category'}
                     >
                       {isLoading ? 'Saving...' : isEditing.category ? 'Update' : 'Create'}
                     </button>
@@ -580,30 +602,32 @@ export default function AdminDashboard() {
               </div>
 
               {/* Categories List */}
-              <div className="bg-white rounded-lg shadow p-4 sm:p-6">
-                <h2 className="text-lg sm:text-xl font-semibold mb-4">Categories</h2>
+              <div className="bg-white rounded-lg shadow-lg p-6">
+                <h2 className="text-2xl font-semibold mb-6">Categories</h2>
                 {isLoading ? (
-                  <div className="text-center py-8 text-sm">Loading...</div>
+                  <div className="text-center py-8 text-base text-gray-600">Loading...</div>
                 ) : categories.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500 text-sm">No categories found</div>
+                  <div className="text-center py-8 text-gray-500 text-base">No categories found</div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                     {categories.map((category) => (
                       <div key={category.id} className="border border-gray-200 rounded-md p-4">
                         <div className="flex justify-between items-center">
-                          <span className="font-medium text-sm sm:text-base">{category.name}</span>
-                          <div className="flex gap-2">
+                          <span className="font-semibold text-base">{category.name}</span>
+                          <div className="flex gap-3">
                             <button
                               type="button"
                               onClick={() => handleEdit('category', category)}
-                              className="text-blue-600 hover:text-blue-800 text-sm"
+                              className="text-blue-600 hover:text-blue-800 text-base transition-colors"
+                              aria-label={`Edit category ${category.name}`}
                             >
                               Edit
                             </button>
                             <button
                               type="button"
                               onClick={() => handleDelete('category', category.id)}
-                              className="text-red-600 hover:text-red-800 text-sm"
+                              className="text-red-600 hover:text-red-800 text-base transition-colors"
+                              aria-label={`Delete category ${category.name}`}
                             >
                               Delete
                             </button>
@@ -619,65 +643,68 @@ export default function AdminDashboard() {
 
           {/* Users Tab */}
           {activeTab === 'users' && (
-            <div className="bg-white rounded-lg shadow p-4 sm:p-6">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
-                <h2 className="text-lg sm:text-xl font-semibold">Users</h2>
-                <div className="w-full sm:w-auto">
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                <h2 className="text-2xl font-semibold">Users</h2>
+                <div className="w-full sm:w-64">
                   <input
                     type="text"
                     placeholder="Search users..."
                     value={userSearchTerm}
                     onChange={(e) => setUserSearchTerm(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-md text-sm"
+                    className="w-full p-3 border border-gray-300 rounded-md text-base focus:ring-2 focus:ring-blue-500"
+                    aria-label="Search users"
                   />
                 </div>
               </div>
 
               {isLoading ? (
-                <div className="text-center py-8 text-sm">Loading...</div>
+                <div className="text-center py-8 text-base text-gray-600">Loading...</div>
               ) : users.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 text-sm">No users found</div>
+                <div className="text-center py-8 text-gray-500 text-base">No users found</div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   {users.map((user) => (
-                    <div key={user.id} className="border-b border-gray-200 pb-4 last:border-b-0">
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                    <div key={user.id} className="border-b border-gray-200 pb-6 last:border-b-0">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                         {user.profile?.profile_picture && (
                           <Image
                             src={user.profile.profile_picture}
-                            alt="Profile"
-                            width={40}
-                            height={40}
+                            alt={`${user.username}'s profile`}
+                            width={48}
+                            height={48}
                             className="rounded-full"
                           />
                         )}
                         <div className="flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-3">
                             <Link
                               href={`/profile/${user.id}`}
-                              className="font-medium text-sm sm:text-base hover:text-blue-600"
+                              className="font-semibold text-base hover:text-blue-600 transition-colors"
+                              aria-label={`View profile of ${user.username}`}
                             >
                               {user.username}
                             </Link>
                             {user.is_staff && (
-                              <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                              <span className="bg-blue-100 text-blue-800 text-sm px-3 py-1 rounded">
                                 Admin
                               </span>
                             )}
                             {!user.is_active && (
-                              <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded">
+                              <span className="bg-red-100 text-red-800 text-sm px-3 py-1 rounded">
                                 Suspended
                               </span>
                             )}
                           </div>
-                          <p className="text-sm text-gray-600">{user.email}</p>
+                          <p className="text-base text-gray-600 mt-1">{user.email}</p>
                         </div>
-                        <div className="flex gap-2 self-end sm:self-center">
+                        <div className="flex gap-3 self-end sm:self-center">
                           {!user.is_staff && (
                             <button
                               type="button"
                               onClick={() => handleMakeAdmin(user.id)}
-                              className="px-3 py-1 bg-green-100 text-green-800 rounded-md text-sm"
+                              className="px-4 py-2 bg-green-100 text-green-800 rounded-md text-base hover:bg-green-200 transition-colors"
+                              aria-label={`Make ${user.username} admin`}
                             >
                               Make Admin
                             </button>
@@ -685,7 +712,8 @@ export default function AdminDashboard() {
                           <button
                             type="button"
                             onClick={() => handleSuspendUser(user.id)}
-                            className="px-3 py-1 bg-red-100 text-red-800 rounded-md text-sm"
+                            className="px-4 py-2 bg-red-100 text-red-800 rounded-md text-base hover:bg-red-200 transition-colors"
+                            aria-label={user.is_active ? `Suspend ${user.username}` : `Unsuspend ${user.username}`}
                           >
                             {user.is_active ? 'Suspend' : 'Unsuspend'}
                           </button>
@@ -700,54 +728,57 @@ export default function AdminDashboard() {
 
           {/* Comments Tab */}
           {activeTab === 'comments' && (
-            <div className="bg-white rounded-lg shadow p-4 sm:p-6">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
-                <h2 className="text-lg sm:text-xl font-semibold">Comments</h2>
-                <div className="w-full sm:w-auto">
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                <h2 className="text-2xl font-semibold">Comments</h2>
+                <div className="w-full sm:w-64">
                   <input
                     type="text"
                     placeholder="Search comments..."
                     value={commentSearchTerm}
                     onChange={(e) => setCommentSearchTerm(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-md text-sm"
+                    className="w-full p-3 border border-gray-300 rounded-md text-base focus:ring-2 focus:ring-blue-500"
+                    aria-label="Search comments"
                   />
                 </div>
               </div>
 
               {isLoading ? (
-                <div className="text-center py-8 text-sm">Loading...</div>
+                <div className="text-center py-8 text-base text-gray-600">Loading...</div>
               ) : comments.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 text-sm">No comments found</div>
+                <div className="text-center py-8 text-gray-500 text-base">No comments found</div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   {comments.map((comment) => (
-                    <div key={comment.id} className="border-b border-gray-200 pb-4 last:border-b-0">
-                      <div className="flex flex-col sm:flex-row gap-3">
+                    <div key={comment.id} className="border-b border-gray-200 pb-6 last:border-b-0">
+                      <div className="flex flex-col sm:flex-row gap-4">
                         {comment.user.profile?.profile_picture && (
                           <Image
                             src={comment.user.profile.profile_picture}
-                            alt="Profile"
-                            width={40}
-                            height={40}
+                            alt={`${comment.user.username}'s profile`}
+                            width={48}
+                            height={48}
                             className="rounded-full"
                           />
                         )}
                         <div className="flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-3">
                             <Link
                               href={`/profile/${comment.user.id}`}
-                              className="font-medium text-sm sm:text-base hover:text-blue-600"
+                              className="font-semibold text-base hover:text-blue-600 transition-colors"
+                              aria-label={`View profile of ${comment.user.username}`}
                             >
                               {comment.user.username}
                             </Link>
-                            <span className="text-xs text-gray-500">
+                            <span className="text-sm text-gray-500">
                               {new Date(comment.created_at).toLocaleString()}
                             </span>
                           </div>
-                          <p className="text-sm mt-1 line-clamp-3">{comment.content}</p>
+                          <p className="text-base mt-2 line-clamp-3">{comment.content}</p>
                           <Link
                             href={`/articles/${comment.article.id}`}
-                            className="text-xs text-blue-600 hover:underline mt-1 block"
+                            className="text-base text-blue-600 hover:underline mt-2 block"
+                            aria-label={`View article ${comment.article.title}`}
                           >
                             On: {comment.article.title}
                           </Link>
@@ -755,7 +786,8 @@ export default function AdminDashboard() {
                         <button
                           type="button"
                           onClick={() => handleDelete('comment', comment.id)}
-                          className="self-start text-red-600 hover:text-red-800 text-sm"
+                          className="self-start text-red-600 hover:text-red-800 text-base transition-colors"
+                          aria-label={`Delete comment by ${comment.user.username}`}
                         >
                           Delete
                         </button>
@@ -771,3 +803,5 @@ export default function AdminDashboard() {
     </>
   );
 }
+
+AdminDashboard.propTypes = {};
