@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Navbar from '../../components/Navbar';
@@ -7,7 +7,8 @@ import Image from 'next/image';
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const API_URL = 'https://haseebclan.pythonanywhere.com/api/';
+  const API_URL = 'https://haseebclan.pythonanywhere.com/api';
+  const textareaRef = useRef(null);
 
   // State management
   const [activeTab, setActiveTab] = useState('articles');
@@ -35,7 +36,6 @@ export default function AdminDashboard() {
     content: '',
     category_id: '',
     thumbnail: null,
-    formatting: [], // Store formatting instructions
   });
   const [categoryForm, setCategoryForm] = useState({ name: '' });
   const [isEditing, setIsEditing] = useState({ article: false, category: false });
@@ -63,14 +63,17 @@ export default function AdminDashboard() {
       ]);
 
       const [articlesData, usersData, commentsData, categoriesData] = await Promise.all(
-        responses.map((r) => r.json())
+        responses.map(async (r) => {
+          if (!r.ok) throw new Error(`Failed to fetch ${r.url}`);
+          return r.json();
+        })
       );
 
       setStats({
-        totalArticles: articlesData.count || articlesData.length,
-        totalUsers: usersData.count || usersData.length,
-        totalComments: commentsData.count || commentsData.length,
-        totalCategories: categoriesData.length,
+        totalArticles: articlesData.length || 0,
+        totalUsers: usersData.length || 0,
+        totalComments: commentsData.length || 0,
+        totalCategories: categoriesData.length || 0,
       });
     } catch (err) {
       setError('Failed to fetch statistics');
@@ -81,7 +84,7 @@ export default function AdminDashboard() {
     setIsLoading(true);
     try {
       const token = localStorage.getItem('access_token');
-      const url = `${API_URL}/${endpoint}/${search ? `?search=${search}` : ''}`;
+      const url = search ? `${API_URL}/${endpoint}/?search=${encodeURIComponent(search)}` : `${API_URL}/${endpoint}/`;
       const response = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -89,7 +92,7 @@ export default function AdminDashboard() {
       if (!response.ok) throw new Error(`Failed to fetch ${endpoint}`);
 
       const data = await response.json();
-      return data.results || data;
+      return Array.isArray(data) ? data : data.results || [];
     } catch (err) {
       setError(err.message);
       return [];
@@ -132,30 +135,37 @@ export default function AdminDashboard() {
 
     try {
       const token = localStorage.getItem('access_token');
-      const formData = new FormData();
       const isEdit = isEditing[type];
       const id = currentId[type];
+      let url = `${API_URL}/${type}s/`;
+      let body;
 
       if (type === 'article') {
+        const formData = new FormData();
         formData.append('title', articleForm.title);
         formData.append('content', articleForm.content);
         formData.append('category_id', articleForm.category_id);
-        formData.append('formatting', JSON.stringify(articleForm.formatting));
         if (articleForm.thumbnail) formData.append('thumbnail', articleForm.thumbnail);
+        body = formData;
+        url = isEdit ? `${url}${id}/` : url;
       } else {
-        formData.append('name', categoryForm.name);
+        body = JSON.stringify({ name: categoryForm.name });
+        url = isEdit ? `${url}${id}/` : url;
       }
 
-      const url = `${API_URL}/${type}s/${isEdit ? `${id}/` : ''}`;
-      const method = isEdit ? 'PUT' : 'POST';
-
       const response = await fetch(url, {
-        method,
-        headers: { Authorization: `Bearer ${token}` },
-        body: type === 'article' ? formData : JSON.stringify(Object.fromEntries(formData)),
+        method: isEdit ? 'PUT' : 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(type === 'category' && { 'Content-Type': 'application/json' }),
+        },
+        body,
       });
 
-      if (!response.ok) throw new Error(`Failed to ${isEdit ? 'update' : 'create'} ${type}`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to ${isEdit ? 'update' : 'create'} ${type}`);
+      }
 
       setSuccess(`${type.charAt(0).toUpperCase() + type.slice(1)} ${isEdit ? 'updated' : 'created'} successfully!`);
       resetForm(type);
@@ -171,7 +181,7 @@ export default function AdminDashboard() {
 
   const resetForm = (type) => {
     if (type === 'article') {
-      setArticleForm({ title: '', content: '', category_id: '', thumbnail: null, formatting: [] });
+      setArticleForm({ title: '', content: '', category_id: '', thumbnail: null });
     } else {
       setCategoryForm({ name: '' });
     }
@@ -187,7 +197,6 @@ export default function AdminDashboard() {
         content: item.content,
         category_id: item.category.id.toString(),
         thumbnail: null,
-        formatting: item.formatting || [],
       });
     } else {
       setCategoryForm({ name: item.name });
@@ -221,12 +230,15 @@ export default function AdminDashboard() {
   const handleMakeAdmin = async (userId) => {
     try {
       const token = localStorage.getItem('access_token');
-      const response = await fetch(`${API_URL}/users/${userId}/make_admin/`, {
-        method: 'PATCH',
+      const response = await fetch(`${API_URL}/users/${userId}/make-admin/`, {
+        method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!response.ok) throw new Error('Failed to update user role');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update user role');
+      }
 
       setSuccess('User role updated successfully!');
       fetchData('users', userSearchTerm);
@@ -239,12 +251,15 @@ export default function AdminDashboard() {
   const handleSuspendUser = async (userId) => {
     try {
       const token = localStorage.getItem('access_token');
-      const response = await fetch(`${API_URL}/users/${userId}/suspend/`, {
-        method: 'PATCH',
+      const response = await fetch(`${API_URL}/suspend-user/${userId}/`, {
+        method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!response.ok) throw new Error('Failed to update user status');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update user status');
+      }
 
       setSuccess('User status updated successfully!');
       fetchData('users', userSearchTerm);
@@ -256,14 +271,37 @@ export default function AdminDashboard() {
 
   // Formatting handlers
   const addFormatting = (type) => {
-    const selection = window.getSelection();
-    if (selection.rangeCount) {
-      const range = selection.getRangeAt(0);
-      const selectedText = range.toString();
-      if (selectedText) {
-        const formatting = [...articleForm.formatting, { type, text: selectedText }];
-        setArticleForm({ ...articleForm, formatting });
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = articleForm.content.substring(start, end);
+
+    if (selectedText) {
+      let formattedText;
+      switch (type) {
+        case 'heading':
+          formattedText = `# ${selectedText}\n`;
+          break;
+        case 'subheading':
+          formattedText = `## ${selectedText}\n`;
+          break;
+        case 'paragraph':
+          formattedText = `${selectedText}\n\n`;
+          break;
+        default:
+          formattedText = selectedText;
       }
+
+      const newContent = 
+        articleForm.content.substring(0, start) + 
+        formattedText + 
+        articleForm.content.substring(end);
+
+      setArticleForm({ ...articleForm, content: newContent });
+      textarea.focus();
+      textarea.setSelectionRange(start, start + formattedText.length);
     }
   };
 
@@ -391,6 +429,7 @@ export default function AdminDashboard() {
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Content</label>
                       <textarea
+                        ref={textareaRef}
                         value={articleForm.content}
                         onChange={(e) => setArticleForm({ ...articleForm, content: e.target.value })}
                         className="w-full p-2 border border-gray-300 rounded-md min-h-[150px] text-sm"
@@ -403,6 +442,7 @@ export default function AdminDashboard() {
                         type="file"
                         onChange={(e) => setArticleForm({ ...articleForm, thumbnail: e.target.files[0] })}
                         className="w-full p-2 border border-gray-300 rounded-md text-sm"
+                        accept="image/*"
                       />
                     </div>
                   </div>
@@ -465,9 +505,7 @@ export default function AdminDashboard() {
                         <div className="flex flex-col sm:flex-row justify-between gap-4">
                           <div className="flex-1">
                             <h3 className="font-medium text-sm sm:text-base">{article.title}</h3>
-                            <p className="text-sm text-gray-600 mt-1 line-clamp-2">
-                              {article.content}
-                            </p>
+                            <p className="text-sm text-gray-600 mt-1 line-clamp-2">{article.content}</p>
                             <div className="flex flex-wrap gap-2 mt-2 text-xs">
                               <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
                                 {article.category.name}
