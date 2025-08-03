@@ -318,7 +318,7 @@ export default function AdminDashboard() {
   };
 
   const handleSuspendUser = async (userId) => {
-    const action = users.find((u) => u.id === userId)?.is_active ? 'suspend' : 'unsuspend';
+    const action = users.find((u) => u.id === userId)?.is_active ? 'suspend' : 'suspend';
     if (!window.confirm(`Are you sure you want to ${action} this user?`)) return;
 
     try {
@@ -696,7 +696,7 @@ export default function AdminDashboard() {
                                 : 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
                             }`}
                           >
-                            {user.is_active ? 'Suspend' : 'Unsuspend'}
+                            {user.is_active ? 'Suspend' : 'suspend'}
                           </button>
                         </div>
                       </div>
