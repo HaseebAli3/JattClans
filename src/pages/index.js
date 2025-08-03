@@ -14,33 +14,27 @@ const braveQuotes = [
 const features = [
   {
     title: "تاریخی مقامات",
-    description: "جٹ قوم سے منسلک اہم تاریخی مقامات اور ان کی کہانیاں",
-    icon: "🏰"
+    description: "جٹ قوم سے منسلک اہم تاریخی مقامات اور ان کی کہانیاں"
   },
   {
     title: "قومی رہنما",
-    description: "جٹ برادری کے عظیم رہنماؤں کی زندگی کے اہم واقعات",
-    icon: "👑"
+    description: "جٹ برادری کے عظیم رہنماؤں کی زندگی کے اہم واقعات"
   },
   {
     title: "ثقافتی ورثہ",
-    description: "روایتی رقص، موسیقی، پکوان اور تہوار",
-    icon: "🎭"
+    description: "روایتی رقص، موسیقی، پکوان اور تہوار"
   },
   {
     title: "جنگی خدمات",
-    description: "جٹ قوم کی فوجی خدمات اور بہادری کے قصے",
-    icon: "⚔️"
+    description: "جٹ قوم کی فوجی خدمات اور بہادری کے قصے"
   },
   {
     title: "زرعی روایات",
-    description: "کاشتکاری اور زمین داری سے متعلق روایتی علم",
-    icon: "🌾"
+    description: "کاشتکاری اور زمین داری سے متعلق روایتی علم"
   },
   {
     title: "ادبی خدمات",
-    description: "جٹ ادیبوں، شاعروں اور دانشوروں کا تعارف",
-    icon: "📚"
+    description: "جٹ ادیبوں، شاعروں اور دانشوروں کا تعارف"
   }
 ];
 
@@ -105,7 +99,7 @@ function HeroSection({ currentQuoteIndex }) {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="text-2xl md:text-5xl font-bold text-teal-900 mb-6 font-noto-urdu"
+        className="text-3xl md:text-6xl font-bold text-teal-900 mb-6 font-noto-urdu"
       >
         جٹ برادری کا مکمل انسائیکلو پیڈیا
       </motion.h2>
@@ -174,7 +168,7 @@ function HadithSection() {
       </div>
       
       <div className="text-right">
-        <p className="text-sm text-teal-700 font-medium">
+        <p className="text-sm text:teal-700 font-medium">
           <span className="font-bold">حوالہ:</span> سنن الترمذی، کتاب المناقب، باب فضل العرب، حدیث نمبر 3955
         </p>
       </div>
@@ -212,8 +206,7 @@ function FeatureCard({ feature, index }) {
       whileHover={{ scale: 1.03 }}
       className="bg-white rounded-lg shadow-md overflow-hidden border border-teal-100 hover:shadow-lg transition duration-300 flex flex-col h-full"
     >
-      <div className="bg-teal-600 p-4 md:p-6 text-white flex items-center">
-        <span className="text-2xl mr-3">{feature.icon}</span>
+      <div className="bg-teal-600 p-4 md:p-6 text-white">
         <h4 className="font-bold text-base md:text-xl font-noto-urdu">{feature.title}</h4>
       </div>
       <div className="p-4 md:p-6 flex-grow">
