@@ -52,60 +52,68 @@ export default function AdminDashboard() {
     }
   }, [router]);
 
-  // Fetch data functions
-  const fetchStats = useCallback(async () => {
-    try {
-      const token = localStorage.getItem('access_token');
-      const [articlesRes, usersRes, commentsRes, categoriesRes] = await Promise.all([
-        fetch(`${API_URL}/articles/`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${API_URL}/users/`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${API_URL}/comments/`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${API_URL}/categories/`, { headers: { Authorization: `Bearer ${token}` } }),
-      ]);
-
-      const statsData = await Promise.all([
-        articlesRes.json(),
-        usersRes.json(),
-        commentsRes.json(),
-        categoriesRes.json(),
-      ]);
-
-      setStats({
-        totalArticles: statsData[0].length || 0,
-        totalUsers: statsData[1].length || 0,
-        totalComments: statsData[2].length || 0,
-        totalCategories: statsData[3].length || 0,
-      });
-    } catch (err) {
-      setError('Failed to fetch statistics');
-    }
-  }, []);
-
+  // Improved fetch function with better error handling
   const fetchData = useCallback(async (endpoint, params = {}) => {
     setIsLoading(true);
+    setError('');
     try {
       const token = localStorage.getItem('access_token');
       const queryString = new URLSearchParams(params).toString();
       const url = `${API_URL}/${endpoint}/${queryString ? `?${queryString}` : ''}`;
       
       const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || `Failed to fetch ${endpoint}`);
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        throw new Error(text || 'Invalid response from server');
       }
 
       const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.detail || `Failed to fetch ${endpoint}`);
+      }
+
       return Array.isArray(data) ? data : data.results || [];
     } catch (err) {
-      setError(err.message);
+      // Handle HTML error responses
+      const errorMsg = err.message.startsWith('<!DOCTYPE html>') 
+        ? 'Server error occurred' 
+        : err.message;
+      setError(errorMsg);
       return [];
     } finally {
       setIsLoading(false);
     }
   }, []);
+
+  // Fetch stats function
+  const fetchStats = useCallback(async () => {
+    try {
+      const [articlesRes, usersRes, commentsRes, categoriesRes] = await Promise.all([
+        fetchData('articles'),
+        fetchData('users'),
+        fetchData('comments'),
+        fetchData('categories'),
+      ]);
+
+      setStats({
+        totalArticles: articlesRes.length || 0,
+        totalUsers: usersRes.length || 0,
+        totalComments: commentsRes.length || 0,
+        totalCategories: categoriesRes.length || 0,
+      });
+    } catch (err) {
+      setError('Failed to fetch statistics');
+    }
+  }, [fetchData]);
 
   // Tab data fetching
   useEffect(() => {
@@ -135,7 +143,7 @@ export default function AdminDashboard() {
     fetchTabData();
   }, [activeTab, searchTerm, selectedCategory, userSearchTerm, commentSearchTerm, fetchData]);
 
-  // Form handlers
+  // Form submission handler with improved error handling
   const handleSubmit = async (type, e) => {
     e.preventDefault();
     setIsLoading(true);
@@ -160,6 +168,8 @@ export default function AdminDashboard() {
         if (articleForm.category_id) formData.append('category_id', articleForm.category_id);
         if (articleForm.thumbnail) formData.append('thumbnail', articleForm.thumbnail);
         body = formData;
+        // Don't set Content-Type for FormData - the browser will set it with the correct boundary
+        delete headers['Content-Type'];
       } else {
         headers['Content-Type'] = 'application/json';
         body = JSON.stringify({ name: categoryForm.name });
@@ -172,12 +182,19 @@ export default function AdminDashboard() {
         body,
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || `Failed to ${isEdit ? 'update' : 'create'} ${type}`);
+      // Check response content type
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        throw new Error(text || 'Invalid response from server');
       }
 
       const responseData = await response.json();
+
+      if (!response.ok) {
+        throw new Error(responseData.detail || `Failed to ${isEdit ? 'update' : 'create'} ${type}`);
+      }
+
       setSuccess(`${type.charAt(0).toUpperCase() + type.slice(1)} ${isEdit ? 'updated' : 'created'} successfully!`);
       resetForm(type);
       fetchStats();
@@ -192,7 +209,11 @@ export default function AdminDashboard() {
         setCategories(await fetchData('categories'));
       }
     } catch (err) {
-      setError(err.message);
+      // Handle HTML error responses
+      const errorMsg = err.message.startsWith('<!DOCTYPE html>') 
+        ? 'Server error occurred' 
+        : err.message;
+      setError(errorMsg);
     } finally {
       setIsLoading(false);
     }
@@ -224,6 +245,7 @@ export default function AdminDashboard() {
     setCurrentId(prev => ({ ...prev, [type]: item.id }));
   };
 
+  // Improved delete handler with proper headers
   const handleDelete = async (type, id) => {
     if (!window.confirm(`Are you sure you want to delete this ${type}?`)) return;
 
@@ -231,7 +253,10 @@ export default function AdminDashboard() {
       const token = localStorage.getItem('access_token');
       const response = await fetch(`${API_URL}/${type}s/${id}/`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
       });
 
       if (!response.ok) {
@@ -263,7 +288,10 @@ export default function AdminDashboard() {
       const token = localStorage.getItem('access_token');
       const response = await fetch(`${API_URL}/users/${userId}/make-admin/`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
       });
 
       if (!response.ok) {
@@ -287,7 +315,10 @@ export default function AdminDashboard() {
       const token = localStorage.getItem('access_token');
       const response = await fetch(`${API_URL}/suspend-user/${userId}/`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
       });
 
       if (!response.ok) {
@@ -303,10 +334,10 @@ export default function AdminDashboard() {
     }
   };
 
-  // UI Components
+  // UI Components with improved contrast
   const StatsCard = ({ title, value }) => (
     <div className="bg-white rounded-lg shadow p-4 flex-1 min-w-[120px]">
-      <h3 className="text-sm font-medium text-gray-600">{title}</h3>
+      <h3 className="text-sm font-medium text-gray-700">{title}</h3>
       <p className="text-2xl font-bold text-blue-600 mt-1">{value}</p>
     </div>
   );
@@ -318,7 +349,7 @@ export default function AdminDashboard() {
       className={`px-4 py-2 text-sm font-medium ${
         activeTab === tab
           ? 'border-b-2 border-blue-500 text-blue-600'
-          : 'text-gray-500 hover:text-gray-700'
+          : 'text-gray-700 hover:text-blue-600'
       }`}
     >
       {tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -370,7 +401,7 @@ export default function AdminDashboard() {
           {activeTab === 'articles' && (
             <>
               <div className="bg-white rounded-lg shadow p-4 mb-6">
-                <h2 className="text-xl font-semibold mb-4">
+                <h2 className="text-xl font-semibold mb-4 text-gray-800">
                   {isEditing.article ? 'Edit Article' : 'Create Article'}
                 </h2>
                 <form onSubmit={(e) => handleSubmit('article', e)}>
@@ -381,7 +412,7 @@ export default function AdminDashboard() {
                         type="text"
                         value={articleForm.title}
                         onChange={(e) => setArticleForm({...articleForm, title: e.target.value})}
-                        className="w-full p-2 border border-gray-300 rounded-md text-gray-800 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full p-2 border border-gray-300 rounded-md text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         required
                       />
                     </div>
@@ -390,7 +421,7 @@ export default function AdminDashboard() {
                       <select
                         value={articleForm.category_id}
                         onChange={(e) => setArticleForm({...articleForm, category_id: e.target.value})}
-                        className="w-full p-2 border border-gray-300 rounded-md text-gray-800 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full p-2 border border-gray-300 rounded-md text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         required
                       >
                         <option value="">Select category</option>
@@ -404,7 +435,7 @@ export default function AdminDashboard() {
                       <textarea
                         value={articleForm.content}
                         onChange={(e) => setArticleForm({...articleForm, content: e.target.value})}
-                        className="w-full p-2 border border-gray-300 rounded-md min-h-[200px] text-gray-800 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full p-2 border border-gray-300 rounded-md min-h-[200px] text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         required
                       />
                     </div>
@@ -413,7 +444,7 @@ export default function AdminDashboard() {
                       <input
                         type="file"
                         onChange={(e) => setArticleForm({...articleForm, thumbnail: e.target.files[0]})}
-                        className="w-full p-2 border border-gray-300 rounded-md text-gray-800 bg-white file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                        className="w-full p-2 border border-gray-300 rounded-md text-gray-900 bg-white file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                         accept="image/*"
                       />
                     </div>
@@ -442,19 +473,19 @@ export default function AdminDashboard() {
               {/* Articles List */}
               <div className="bg-white rounded-lg shadow p-4">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
-                  <h2 className="text-xl font-semibold">Articles</h2>
+                  <h2 className="text-xl font-semibold text-gray-800">Articles</h2>
                   <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                     <input
                       type="text"
                       placeholder="Search articles..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="p-2 border border-gray-300 rounded-md text-sm w-full text-gray-800 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="p-2 border border-gray-300 rounded-md text-sm w-full text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                     <select
                       value={selectedCategory}
                       onChange={(e) => setSelectedCategory(e.target.value)}
-                      className="p-2 border border-gray-300 rounded-md text-sm w-full sm:w-auto text-gray-800 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="p-2 border border-gray-300 rounded-md text-sm w-full sm:w-auto text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     >
                       <option value="">All Categories</option>
                       {categories.map(cat => (
@@ -465,9 +496,9 @@ export default function AdminDashboard() {
                 </div>
 
                 {isLoading ? (
-                  <div className="text-center py-8">Loading...</div>
+                  <div className="text-center py-8 text-gray-700">Loading...</div>
                 ) : articles.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">No articles found</div>
+                  <div className="text-center py-8 text-gray-600">No articles found</div>
                 ) : (
                   <div className="space-y-4">
                     {articles.map(article => (
@@ -475,7 +506,7 @@ export default function AdminDashboard() {
                         <div className="flex flex-col sm:flex-row justify-between gap-4">
                           <div className="flex-1">
                             <h3 className="font-medium text-gray-800">{article.title}</h3>
-                            <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                            <p className="text-sm text-gray-700 mt-1 line-clamp-2">
                               {article.content.substring(0, 200)}...
                             </p>
                             <div className="flex flex-wrap gap-2 mt-2 text-xs">
@@ -514,7 +545,7 @@ export default function AdminDashboard() {
           {activeTab === 'categories' && (
             <>
               <div className="bg-white rounded-lg shadow p-4 mb-6">
-                <h2 className="text-xl font-semibold mb-4">
+                <h2 className="text-xl font-semibold mb-4 text-gray-800">
                   {isEditing.category ? 'Edit Category' : 'Create Category'}
                 </h2>
                 <form onSubmit={(e) => handleSubmit('category', e)}>
@@ -524,7 +555,7 @@ export default function AdminDashboard() {
                       type="text"
                       value={categoryForm.name}
                       onChange={(e) => setCategoryForm({name: e.target.value})}
-                      className="w-full p-2 border border-gray-300 rounded-md text-gray-800 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full p-2 border border-gray-300 rounded-md text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       required
                     />
                   </div>
@@ -551,11 +582,11 @@ export default function AdminDashboard() {
 
               {/* Categories List */}
               <div className="bg-white rounded-lg shadow p-4">
-                <h2 className="text-xl font-semibold mb-4">Categories</h2>
+                <h2 className="text-xl font-semibold mb-4 text-gray-800">Categories</h2>
                 {isLoading ? (
-                  <div className="text-center py-8">Loading...</div>
+                  <div className="text-center py-8 text-gray-700">Loading...</div>
                 ) : categories.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">No categories found</div>
+                  <div className="text-center py-8 text-gray-600">No categories found</div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                     {categories.map(category => (
@@ -589,22 +620,22 @@ export default function AdminDashboard() {
           {activeTab === 'users' && (
             <div className="bg-white rounded-lg shadow p-4">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
-                <h2 className="text-xl font-semibold">Users</h2>
+                <h2 className="text-xl font-semibold text-gray-800">Users</h2>
                 <div className="w-full sm:w-64">
                   <input
                     type="text"
                     placeholder="Search users..."
                     value={userSearchTerm}
                     onChange={(e) => setUserSearchTerm(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-md text-sm text-gray-800 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full p-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
               </div>
 
               {isLoading ? (
-                <div className="text-center py-8">Loading...</div>
+                <div className="text-center py-8 text-gray-700">Loading...</div>
               ) : users.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">No users found</div>
+                <div className="text-center py-8 text-gray-600">No users found</div>
               ) : (
                 <div className="space-y-4">
                   {users.map(user => (
@@ -636,7 +667,7 @@ export default function AdminDashboard() {
                               </span>
                             )}
                           </div>
-                          <p className="text-sm text-gray-600 truncate">{user.email}</p>
+                          <p className="text-sm text-gray-700 truncate">{user.email}</p>
                         </div>
                         <div className="flex gap-2 flex-shrink-0">
                           {!user.is_staff && (
@@ -670,22 +701,22 @@ export default function AdminDashboard() {
           {activeTab === 'comments' && (
             <div className="bg-white rounded-lg shadow p-4">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
-                <h2 className="text-xl font-semibold">Comments</h2>
+                <h2 className="text-xl font-semibold text-gray-800">Comments</h2>
                 <div className="w-full sm:w-64">
                   <input
                     type="text"
                     placeholder="Search comments..."
                     value={commentSearchTerm}
                     onChange={(e) => setCommentSearchTerm(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-md text-sm text-gray-800 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full p-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
               </div>
 
               {isLoading ? (
-                <div className="text-center py-8">Loading...</div>
+                <div className="text-center py-8 text-gray-700">Loading...</div>
               ) : comments.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">No comments found</div>
+                <div className="text-center py-8 text-gray-600">No comments found</div>
               ) : (
                 <div className="space-y-4">
                   {comments.map(comment => (
@@ -706,7 +737,7 @@ export default function AdminDashboard() {
                             <Link href={`/profile/${comment.user.id}`} className="font-medium hover:text-blue-600 truncate text-gray-800">
                               {comment.user.username}
                             </Link>
-                            <span className="text-xs text-gray-500 whitespace-nowrap">
+                            <span className="text-xs text-gray-600 whitespace-nowrap">
                               {new Date(comment.created_at).toLocaleString()}
                             </span>
                           </div>
