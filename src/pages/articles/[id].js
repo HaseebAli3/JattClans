@@ -105,7 +105,7 @@ export default function ArticleDetail() {
         <style jsx global>{`
           @font-face {
             font-family: 'Jameel Noori Nastaleeq';
-            src: url('/fonts/Jameel-Noori-Nastaleeq.ttf') format('truetype');
+            src: url('/fonts/Alvi Nastaleeq Regular.ttf') format('truetype');
             font-weight: normal;
             font-style: normal;
             font-display: swap;
