@@ -6,7 +6,7 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { FaHeart, FaRegHeart, FaEye, FaCalendarAlt, FaUser, FaYoutube } from 'react-icons/fa';
 
-// Font face CSS (should also be added to your global CSS file)
+// Enhanced font styling with perfect Urdu support
 const fontFaceCSS = `
   @font-face {
     font-family: 'Jameel Noori Nastaleeq';
@@ -16,12 +16,28 @@ const fontFaceCSS = `
     font-display: swap;
   }
   
-  .urdu-text {
+  .urdu-content {
     font-family: 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', 'Amiri', serif;
-    text-align: right;
     direction: rtl;
-    line-height: 2;
-    word-spacing: 0.2rem;
+    text-align: right;
+    line-height: 2.5;
+    word-spacing: 0.3rem;
+    unicode-bidi: plaintext;
+  }
+
+  /* Right-aligned headings */
+  .urdu-content .heading {
+    font-weight: bold;
+    font-size: 1.5em;
+    margin: 2rem 0 1rem;
+    text-align: right;
+  }
+
+  /* Justified regular text */
+  .urdu-content p {
+    margin-bottom: 1.5rem;
+    text-align: justify;
+    text-justify: inter-word;
   }
 `;
 
@@ -37,8 +53,28 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Function to process content with asterisk-based headings
+const processContent = (content) => {
+  if (!content) return '';
+  
+  // Split content by asterisk patterns
+  const parts = content.split(/\*([^*]+)\*/g);
+  
+  return parts.map((part, index) => {
+    if (index % 2 === 1) {
+      // Text between asterisks becomes right-aligned heading
+      return `<div class="heading">${part}</div>`;
+    } else if (part.trim()) {
+      // Regular justified paragraphs
+      return `<p>${part}</p>`;
+    }
+    return '';
+  }).join('');
+};
+
 export default function ArticleDetail() {
   const [article, setArticle] = useState(null);
+  const [processedContent, setProcessedContent] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isLiking, setIsLiking] = useState(false);
@@ -67,6 +103,7 @@ export default function ArticleDetail() {
         setIsLoading(true);
         const response = await api.get(`articles/${id}/`);
         setArticle(response.data);
+        setProcessedContent(processContent(response.data.content));
       } catch (error) {
         setError(error.response?.status === 404 ? 'Article not found' : 'Failed to load article');
       } finally {
@@ -106,6 +143,7 @@ export default function ArticleDetail() {
       await api.post('like/', { article_id: article.id });
       const updatedArticle = await api.get(`articles/${id}/`);
       setArticle(updatedArticle.data);
+      setProcessedContent(processContent(updatedArticle.data.content));
     } catch (err) {
       setError('Failed to like article');
     } finally {
@@ -131,16 +169,15 @@ export default function ArticleDetail() {
         <title>{article.title} | Jutt Clans</title>
         <meta name="description" content={article.meta_description || article.title} />
         <link rel="icon" href="/jutt-icon.png" />
-        {/* Add fallback fonts from Google */}
         <link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu&family=Amiri&display=swap" rel="stylesheet" />
       </Head>
 
       <Navbar currentPage="articles" />
       
       <div className="w-full bg-white">
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-4 md:px-6 py-8">
           {/* Article Header */}
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex justify-between items-center mb-8">
             <a 
               href="https://www.youtube.com/@Tahir_Farz" 
               target="_blank" 
@@ -149,20 +186,23 @@ export default function ArticleDetail() {
             >
               <FaYoutube className="text-2xl md:text-3xl" />
             </a>
-            <h1 className="text-2xl md:text-3xl font-bold text-teal-900 urdu-text">
+            <h1 className="text-2xl md:text-3xl font-bold text-teal-900 urdu-content">
               {article.title}
             </h1>
           </div>
 
-          {/* Article Content */}
+          {/* Processed Article Content */}
           <div 
-            className="text-gray-800 mb-8 article-content no-copy urdu-text"
-            style={{ fontSize: '1.3rem' }}
-            dangerouslySetInnerHTML={{ __html: article.content }} 
+            className="text-gray-800 mb-8 article-content no-copy urdu-content"
+            style={{ 
+              fontSize: 'clamp(1.2rem, 3vw, 1.4rem)',
+              padding: '0 0.5rem'
+            }}
+            dangerouslySetInnerHTML={{ __html: processedContent }} 
           />
 
-          {/* Article Metadata */}
-          <div className="border-t border-teal-200 pt-6">
+          {/* Article Metadata (LTR) */}
+          <div className="border-t border-teal-200 pt-6" style={{ direction: 'ltr' }}>
             <div className="flex flex-col sm:flex-row justify-between gap-4">
               <div className="flex flex-wrap items-center gap-4 text-sm text-teal-700">
                 <div className="flex items-center">
@@ -208,9 +248,9 @@ export default function ArticleDetail() {
         </div>
       </div>
 
-      {/* Comment Section */}
-      <div className="w-full bg-white border-t border-teal-100">
-        <div className="container mx-auto px-4 py-8">
+      {/* Comment Section (LTR) */}
+      <div className="w-full bg-white border-t border-teal-100" style={{ direction: 'ltr' }}>
+        <div className="container mx-auto px-4 md:px-6 py-8">
           <h2 className="text-xl font-semibold text-teal-900 mb-4">Comments</h2>
           <CommentSection 
             articleId={article.id} 
@@ -220,8 +260,8 @@ export default function ArticleDetail() {
         </div>
       </div>
 
-      {/* Footer */}
-      <footer className="bg-teal-800 text-white py-6">
+      {/* Footer (LTR) */}
+      <footer className="bg-teal-800 text-white py-6" style={{ direction: 'ltr' }}>
         <div className="container mx-auto px-4 text-center">
           <p className="text-sm text-teal-300">
             © {new Date().getFullYear()} Jatt Clans. All rights reserved.
@@ -230,4 +270,4 @@ export default function ArticleDetail() {
       </footer>
     </div>
   );
-} 
+}
