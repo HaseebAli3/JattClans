@@ -17,24 +17,6 @@ import {
   FaScroll
 } from 'react-icons/fa';
 
-// Font styling for Urdu text
-const fontFaceCSS = `
-  @font-face {
-    font-family: 'Jameel Noori Nastaleeq';
-    src: url('/fonts/Jameel-Noori-Nastaleeq.ttf') format('truetype');
-    font-weight: normal;
-    font-style: normal;
-    font-display: swap;
-  }
-
-  .urdu-text {
-    font-family: 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', 'Amiri', serif;
-    direction: rtl;
-    text-align: right;
-    font-size: clamp(1.2rem, 2.5vw, 1.3rem);
-  }
-`;
-
 export default function Navbar({ currentPage }) {
   const [user, setUser] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -42,11 +24,6 @@ export default function Navbar({ currentPage }) {
   const drawerRef = useRef(null);
 
   useEffect(() => {
-    // Inject font styles
-    const style = document.createElement('style');
-    style.innerHTML = fontFaceCSS;
-    document.head.appendChild(style);
-
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
       try {
@@ -65,7 +42,6 @@ export default function Navbar({ currentPage }) {
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
-      document.head.removeChild(style);
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
@@ -86,7 +62,7 @@ export default function Navbar({ currentPage }) {
           <div className="flex-shrink-0 flex items-center">
             <Link href="/" className="flex items-center">
               <FaLandmark className="h-6 w-6 text-white mr-2" />
-              <span className="text-xl font-bold text-white urdu-text">جٹ کلینز</span>
+              <span className="text-xl font-bold text-white font-urdu">جٹ کلینز</span>
             </Link>
           </div>
 
