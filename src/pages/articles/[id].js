@@ -6,6 +6,25 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { FaHeart, FaRegHeart, FaEye, FaCalendarAlt, FaUser, FaYoutube } from 'react-icons/fa';
 
+// Font face CSS (should also be added to your global CSS file)
+const fontFaceCSS = `
+  @font-face {
+    font-family: 'Jameel Noori Nastaleeq';
+    src: url('/fonts/Jameel-Noori-Nastaleeq.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+  }
+  
+  .urdu-text {
+    font-family: 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', 'Amiri', serif;
+    text-align: right;
+    direction: rtl;
+    line-height: 2;
+    word-spacing: 0.2rem;
+  }
+`;
+
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || 'https://haseebclan.pythonanywhere.com/api/',
 });
@@ -26,6 +45,17 @@ export default function ArticleDetail() {
   const [currentUser, setCurrentUser] = useState(null);
   const router = useRouter();
   const { id } = router.query;
+
+  useEffect(() => {
+    // Inject font styles
+    const style = document.createElement('style');
+    style.innerHTML = fontFaceCSS;
+    document.head.appendChild(style);
+
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -101,24 +131,15 @@ export default function ArticleDetail() {
         <title>{article.title} | Jutt Clans</title>
         <meta name="description" content={article.meta_description || article.title} />
         <link rel="icon" href="/jutt-icon.png" />
-        {/* Add Jameel Noori Nastaleeq font */}
-        <style jsx global>{`
-          @font-face {
-            font-family: 'Jameel Noori Nastaleeq';
-            src: url('/fonts/Alvi Nastaleeq Regular.ttf') format('truetype');
-            font-weight: normal;
-            font-style: normal;
-            font-display: swap;
-          }
-        `}</style>
+        {/* Add fallback fonts from Google */}
+        <link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu&family=Amiri&display=swap" rel="stylesheet" />
       </Head>
 
       <Navbar currentPage="articles" />
       
-      {/* Main Content */}
       <div className="w-full bg-white">
         <div className="container mx-auto px-4 py-8">
-          {/* Article Title and YouTube Icon */}
+          {/* Article Header */}
           <div className="flex justify-between items-center mb-6">
             <a 
               href="https://www.youtube.com/@Tahir_Farz" 
@@ -128,32 +149,15 @@ export default function ArticleDetail() {
             >
               <FaYoutube className="text-2xl md:text-3xl" />
             </a>
-            <h1 
-              className="text-2xl md:text-3xl font-bold text-teal-900"
-              style={{ 
-                fontFamily: "'Jameel Noori Nastaleeq', serif",
-                textAlign: 'right',
-                width: 'calc(100% - 40px)',
-                direction: 'rtl',
-                lineHeight: '1.6'
-              }}
-            >
+            <h1 className="text-2xl md:text-3xl font-bold text-teal-900 urdu-text">
               {article.title}
             </h1>
           </div>
 
-          {/* Article Content with Jameel Noori Nastaleeq font */}
+          {/* Article Content */}
           <div 
-            className="text-gray-800 mb-8 w-full article-content no-copy"
-            style={{ 
-              fontFamily: "'Jameel Noori Nastaleeq', serif",
-              fontSize: '1.3rem',
-              lineHeight: '2.2',
-              textAlign: 'right',
-              direction: 'rtl',
-              wordBreak: 'break-word',
-              whiteSpace: 'pre-line'
-            }}
+            className="text-gray-800 mb-8 article-content no-copy urdu-text"
+            style={{ fontSize: '1.3rem' }}
             dangerouslySetInnerHTML={{ __html: article.content }} 
           />
 
@@ -167,11 +171,13 @@ export default function ArticleDetail() {
                 </div>
                 <div className="flex items-center">
                   <FaCalendarAlt className="mr-2" />
-                  <span>{new Date(article.created_at).toLocaleDateString('en-US', { 
-                    year: 'numeric', 
-                    month: 'long', 
-                    day: 'numeric' 
-                  })}</span>
+                  <span>
+                    {new Date(article.created_at).toLocaleDateString('en-US', { 
+                      year: 'numeric', 
+                      month: 'long', 
+                      day: 'numeric' 
+                    })}
+                  </span>
                 </div>
               </div>
 
