@@ -105,14 +105,11 @@ export default function ArticleDetail() {
 
       <Navbar currentPage="articles" />
       
-      {/* Main Content - Directly connected to navbar */}
+      {/* Main Content */}
       <div className="w-full bg-white">
         <div className="container mx-auto px-4 py-8">
-          {/* Article Title and YouTube Icon */}
+          {/* Article Title and YouTube Icon - YouTube button on left, title right-aligned */}
           <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl md:text-3xl font-bold text-teal-900 text-left">
-              {article.title}
-            </h1>
             <a 
               href="https://www.youtube.com/@Tahir_Farz" 
               target="_blank" 
@@ -121,21 +118,33 @@ export default function ArticleDetail() {
             >
               <FaYoutube className="text-2xl md:text-3xl" />
             </a>
+            <h1 
+              className="text-2xl md:text-3xl font-bold text-teal-900"
+              style={{ 
+                textAlign: 'right',
+                width: 'calc(100% - 40px)',
+                direction: 'rtl'
+              }}
+            >
+              {article.title}
+            </h1>
           </div>
 
-          {/* Article Content - Left aligned with proper line breaks */}
+          {/* Article Content - Right aligned for Urdu */}
           <div 
-            className="text-gray-800 mb-8 text-left w-full article-content no-copy"
+            className="text-gray-800 mb-8 w-full article-content no-copy"
             style={{ 
               lineHeight: '1.8',
               fontSize: '1.1rem',
               wordBreak: 'break-word',
-              whiteSpace: 'pre-line'
+              whiteSpace: 'pre-line',
+              textAlign: 'right',
+              direction: 'rtl'
             }}
             dangerouslySetInnerHTML={{ __html: article.content }} 
           />
 
-          {/* Article Metadata */}
+          {/* Article Metadata - Mixed alignment */}
           <div className="border-t border-teal-200 pt-6">
             <div className="flex flex-col sm:flex-row justify-between gap-4">
               <div className="flex flex-wrap items-center gap-4 text-sm text-teal-700">
@@ -180,10 +189,10 @@ export default function ArticleDetail() {
         </div>
       </div>
 
-      {/* Comment Section - Seamlessly connected */}
+      {/* Comment Section */}
       <div className="w-full bg-white border-t border-teal-100">
         <div className="container mx-auto px-4 py-8">
-          <h2 className="text-xl font-semibold text-teal-900 mb-4 text-left">Comments</h2>
+          <h2 className="text-xl font-semibold text-teal-900 mb-4">Comments</h2>
           <CommentSection 
             articleId={article.id} 
             api={api} 
