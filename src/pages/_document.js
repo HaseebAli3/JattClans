@@ -2,36 +2,26 @@ import { Html, Head, Main, NextScript } from "next/document";
 
 export default function Document() {
   return (
-    <Html lang="ur" dir="rtl"> {/* Changed lang to Urdu + RTL */}
+    <Html lang="en">
       <Head>
-        {/* Preload Alvi Nastaleeq */}
         <link
-          rel="preload"
-          href="/fonts/Alvi-Nastaleeq-Regular.woff2"
-          as="font"
-          type="font/woff2"
-          crossOrigin="anonymous"
+          href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu&display=swap"
+          rel="stylesheet"
         />
-        
-        {/* Font-face definition */}
-        <style>{`
-          @font-face {
-            font-family: 'Alvi Nastaleeq';
-            src: url('/fonts/Alvi-Nastaleeq-Regular.woff2') format('woff2');
-            font-display: swap;
-          }
-        `}</style>
-
-        {/* Keep all existing head elements */}
+        {/* Favicon Basic Implementation */}
         <link rel="icon" href="/favicons.png" sizes="any" />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        
+        {/* Apple Touch Icon */}
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        
+        {/* Web Manifest */}
         <link rel="manifest" href="/site.webmanifest" />
+        
+        {/* Theme Color */}
         <meta name="theme-color" content="#1a365d" />
       </Head>
-      
-      {/* Apply font ONLY to Urdu content */}
-      <body className="antialiased" style={{ fontFamily: "'Alvi Nastaleeq', serif" }}>
+      <body className="antialiased">
         <Main />
         <NextScript />
       </body>
