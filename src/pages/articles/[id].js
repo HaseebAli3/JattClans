@@ -28,18 +28,18 @@ const fontFaceCSS = `
     font-family: 'Noto Nastaliq Urdu', 'Amiri', serif;
     direction: rtl;
     text-align: right;
-    line-height: 2.2; /* Reduced line spacing */
-    word-spacing: 0.2rem;
-    font-size: clamp(1.4rem, 3.5vw, 1.6rem); /* Increased font size */
+    line-height: 2.2;
+    word-spacing: 0.1rem; /* Reduced word spacing */
+    font-size: clamp(1.5rem, 3.8vw, 1.7rem); /* Increased font size */
     unicode-bidi: plaintext;
-    margin: 0.5rem 0; /* Reduced margin between content */
+    margin: 0.5rem 0;
   }
 
   /* Right-aligned headings */
   .urdu-content .heading {
     font-family: 'Noto Nastaliq Urdu', 'Amiri', serif;
     font-weight: bold;
-    font-size: clamp(1.8rem, 4vw, 2rem); /* Slightly larger heading */
+    font-size: clamp(1.9rem, 4.2vw, 2.1rem); /* Slightly larger heading */
     margin: 1.5rem 0 0.8rem;
     text-align: right;
   }
@@ -47,7 +47,7 @@ const fontFaceCSS = `
   /* Justified regular text with fallback for specific character */
   .urdu-content p {
     font-family: 'Noto Nastaliq Urdu', 'Amiri', serif;
-    margin-bottom: 0.8rem; /* Reduced paragraph spacing */
+    margin-bottom: 0.8rem;
     text-align: justify;
     text-justify: inter-word;
   }
