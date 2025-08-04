@@ -47,6 +47,28 @@ export default function ArticleDetail() {
     fetchArticle();
   }, [router.isReady, id]);
 
+  useEffect(() => {
+    const handleCopy = (e) => {
+      e.preventDefault();
+      alert('Copying content is not allowed');
+    };
+
+    const articleContent = document.querySelector('.article-content');
+    if (articleContent) {
+      articleContent.addEventListener('copy', handleCopy);
+      articleContent.addEventListener('cut', handleCopy);
+      articleContent.addEventListener('contextmenu', (e) => e.preventDefault());
+    }
+
+    return () => {
+      if (articleContent) {
+        articleContent.removeEventListener('copy', handleCopy);
+        articleContent.removeEventListener('cut', handleCopy);
+        articleContent.removeEventListener('contextmenu', (e) => e.preventDefault());
+      }
+    };
+  }, [article]);
+
   const handleLikeArticle = async () => {
     if (!currentUser) return router.push('/login');
     try {
@@ -103,7 +125,7 @@ export default function ArticleDetail() {
 
           {/* Article Content - Left aligned with proper line breaks */}
           <div 
-            className="text-gray-800 mb-8 text-left w-full"
+            className="text-gray-800 mb-8 text-left w-full article-content no-copy"
             style={{ 
               lineHeight: '1.8',
               fontSize: '1.1rem',
