@@ -6,7 +6,7 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { FaHeart, FaRegHeart, FaEye, FaCalendarAlt, FaUser, FaYoutube } from 'react-icons/fa';
 
-// Enhanced font styling with perfect Urdu support
+// Enhanced font styling with Urdu support and fallback for specific characters
 const fontFaceCSS = `
   @font-face {
     font-family: 'Jameel Noori Nastaleeq';
@@ -15,29 +15,51 @@ const fontFaceCSS = `
     font-style: normal;
     font-display: swap;
   }
-  
+
+  @font-face {
+    font-family: 'Noto Nastaliq Urdu';
+    src: url('https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu') format('woff2');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+  }
+
   .urdu-content {
-    font-family: 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', 'Amiri', serif;
+    font-family: 'Noto Nastaliq Urdu', 'Amiri', serif;
     direction: rtl;
     text-align: right;
-    line-height: 2.5;
-    word-spacing: 0.3rem;
+    line-height: 2.2; /* Reduced line spacing */
+    word-spacing: 0.2rem;
+    font-size: clamp(1.4rem, 3.5vw, 1.6rem); /* Increased font size */
     unicode-bidi: plaintext;
+    margin: 0.5rem 0; /* Reduced margin between content */
   }
 
   /* Right-aligned headings */
   .urdu-content .heading {
+    font-family: 'Noto Nastaliq Urdu', 'Amiri', serif;
     font-weight: bold;
-    font-size: 1.5em;
-    margin: 2rem 0 1rem;
+    font-size: clamp(1.8rem, 4vw, 2rem); /* Slightly larger heading */
+    margin: 1.5rem 0 0.8rem;
     text-align: right;
   }
 
-  /* Justified regular text */
+  /* Justified regular text with fallback for specific character */
   .urdu-content p {
-    margin-bottom: 1.5rem;
+    font-family: 'Noto Nastaliq Urdu', 'Amiri', serif;
+    margin-bottom: 0.8rem; /* Reduced paragraph spacing */
     text-align: justify;
     text-justify: inter-word;
+  }
+
+  /* Fallback for words containing specific character */
+  .urdu-content p:has(> span.fallback),
+  .urdu-content .heading:has(> span.fallback) {
+    font-family: 'Noto Nastaliq Urdu', 'Amiri', serif !important;
+  }
+
+  .urdu-content span.fallback {
+    font-family: 'Noto Nastaliq Urdu', 'Amiri', serif !important;
   }
 `;
 
@@ -53,20 +75,27 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Function to process content with asterisk-based headings
+// Function to process content with asterisk-based headings and handle specific character
 const processContent = (content) => {
   if (!content) return '';
-  
+
   // Split content by asterisk patterns
   const parts = content.split(/\*([^*]+)\*/g);
-  
+
   return parts.map((part, index) => {
+    // Check for the specific character ٸ in the part
+    const containsSpecialChar = part.includes('ٸ');
+
     if (index % 2 === 1) {
       // Text between asterisks becomes right-aligned heading
-      return `<div class="heading">${part}</div>`;
+      return `<div class="heading">${
+        containsSpecialChar ? `<span class="fallback">${part}</span>` : part
+      }</div>`;
     } else if (part.trim()) {
       // Regular justified paragraphs
-      return `<p>${part}</p>`;
+      return `<p>${
+        containsSpecialChar ? `<span class="fallback">${part}</span>` : part
+      }</p>`;
     }
     return '';
   }).join('');
@@ -177,7 +206,7 @@ export default function ArticleDetail() {
       <div className="w-full bg-white">
         <div className="container mx-auto px-4 md:px-6 py-8">
           {/* Article Header */}
-          <div className="flex justify-between items-center mb-8">
+          <div className="flex justify-between items-center mb-6">
             <a 
               href="https://www.youtube.com/@Tahir_Farz" 
               target="_blank" 
@@ -193,11 +222,8 @@ export default function ArticleDetail() {
 
           {/* Processed Article Content */}
           <div 
-            className="text-gray-800 mb-8 article-content no-copy urdu-content"
-            style={{ 
-              fontSize: 'clamp(1.2rem, 3vw, 1.4rem)',
-              padding: '0 0.5rem'
-            }}
+            className="text-gray-800 mb-6 article-content no-copy urdu-content"
+            style={{ padding: '0 0.5rem' }}
             dangerouslySetInnerHTML={{ __html: processedContent }} 
           />
 
@@ -264,7 +290,7 @@ export default function ArticleDetail() {
       <footer className="bg-teal-800 text-white py-6" style={{ direction: 'ltr' }}>
         <div className="container mx-auto px-4 text-center">
           <p className="text-sm text-teal-300">
-            © {new Date().getFullYear()} Jatt Clans. All rights reserved.
+            © {new Date().getFullYear()} Jutt Clans. All rights reserved.
           </p>
         </div>
       </footer>
