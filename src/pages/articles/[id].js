@@ -6,7 +6,7 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { FaHeart, FaRegHeart, FaEye, FaCalendarAlt, FaUser, FaYoutube } from 'react-icons/fa';
 
-// Font face CSS (should also be added to your global CSS file)
+// Enhanced font styling with perfect Urdu support
 const fontFaceCSS = `
   @font-face {
     font-family: 'Jameel Noori Nastaleeq';
@@ -16,12 +16,36 @@ const fontFaceCSS = `
     font-display: swap;
   }
   
-  .urdu-text {
+  .urdu-content {
     font-family: 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', 'Amiri', serif;
     text-align: right;
     direction: rtl;
-    line-height: 2;
-    word-spacing: 0.2rem;
+    line-height: 2.5;
+    word-spacing: 0.3rem;
+    unicode-bidi: plaintext;
+  }
+
+  /* Preserve all user formatting exactly */
+  .urdu-content p {
+    margin-bottom: 1.5rem;
+    text-align: right;
+  }
+
+  .urdu-content h1, 
+  .urdu-content h2, 
+  .urdu-content h3,
+  .urdu-content h4,
+  .urdu-content h5,
+  .urdu-content h6 {
+    margin: 2rem 0 1rem;
+    text-align: right;
+    font-weight: bold;
+  }
+
+  .urdu-content br {
+    display: block;
+    content: "";
+    margin-bottom: 1rem;
   }
 `;
 
@@ -131,16 +155,15 @@ export default function ArticleDetail() {
         <title>{article.title} | Jutt Clans</title>
         <meta name="description" content={article.meta_description || article.title} />
         <link rel="icon" href="/jutt-icon.png" />
-        {/* Add fallback fonts from Google */}
         <link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu&family=Amiri&display=swap" rel="stylesheet" />
       </Head>
 
       <Navbar currentPage="articles" />
       
       <div className="w-full bg-white">
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-4 md:px-6 py-8">
           {/* Article Header */}
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex justify-between items-center mb-8">
             <a 
               href="https://www.youtube.com/@Tahir_Farz" 
               target="_blank" 
@@ -149,20 +172,23 @@ export default function ArticleDetail() {
             >
               <FaYoutube className="text-2xl md:text-3xl" />
             </a>
-            <h1 className="text-2xl md:text-3xl font-bold text-teal-900 urdu-text">
+            <h1 className="text-2xl md:text-3xl font-bold text-teal-900 urdu-content">
               {article.title}
             </h1>
           </div>
 
-          {/* Article Content */}
+          {/* Article Content - Preserves ALL formatting */}
           <div 
-            className="text-gray-800 mb-8 article-content no-copy urdu-text"
-            style={{ fontSize: '1.3rem' }}
+            className="text-gray-800 mb-8 article-content no-copy urdu-content"
+            style={{ 
+              fontSize: 'clamp(1.2rem, 3vw, 1.4rem)',
+              padding: '0 0.5rem'
+            }}
             dangerouslySetInnerHTML={{ __html: article.content }} 
           />
 
-          {/* Article Metadata */}
-          <div className="border-t border-teal-200 pt-6">
+          {/* Article Metadata (LTR) */}
+          <div className="border-t border-teal-200 pt-6" style={{ direction: 'ltr' }}>
             <div className="flex flex-col sm:flex-row justify-between gap-4">
               <div className="flex flex-wrap items-center gap-4 text-sm text-teal-700">
                 <div className="flex items-center">
@@ -208,9 +234,9 @@ export default function ArticleDetail() {
         </div>
       </div>
 
-      {/* Comment Section */}
-      <div className="w-full bg-white border-t border-teal-100">
-        <div className="container mx-auto px-4 py-8">
+      {/* Comment Section (LTR) */}
+      <div className="w-full bg-white border-t border-teal-100" style={{ direction: 'ltr' }}>
+        <div className="container mx-auto px-4 md:px-6 py-8">
           <h2 className="text-xl font-semibold text-teal-900 mb-4">Comments</h2>
           <CommentSection 
             articleId={article.id} 
@@ -220,8 +246,8 @@ export default function ArticleDetail() {
         </div>
       </div>
 
-      {/* Footer */}
-      <footer className="bg-teal-800 text-white py-6">
+      {/* Footer (LTR) */}
+      <footer className="bg-teal-800 text-white py-6" style={{ direction: 'ltr' }}>
         <div className="container mx-auto px-4 text-center">
           <p className="text-sm text-teal-300">
             © {new Date().getFullYear()} Jatt Clans. All rights reserved.
