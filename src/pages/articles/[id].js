@@ -101,6 +101,16 @@ export default function ArticleDetail() {
         <title>{article.title} | Jutt Clans</title>
         <meta name="description" content={article.meta_description || article.title} />
         <link rel="icon" href="/jutt-icon.png" />
+        {/* Add Jameel Noori Nastaleeq font */}
+        <style jsx global>{`
+          @font-face {
+            font-family: 'Jameel Noori Nastaleeq';
+            src: url('/fonts/Jameel-Noori-Nastaleeq.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+            font-display: swap;
+          }
+        `}</style>
       </Head>
 
       <Navbar currentPage="articles" />
@@ -108,7 +118,7 @@ export default function ArticleDetail() {
       {/* Main Content */}
       <div className="w-full bg-white">
         <div className="container mx-auto px-4 py-8">
-          {/* Article Title and YouTube Icon - YouTube button on left, title right-aligned */}
+          {/* Article Title and YouTube Icon */}
           <div className="flex justify-between items-center mb-6">
             <a 
               href="https://www.youtube.com/@Tahir_Farz" 
@@ -121,30 +131,33 @@ export default function ArticleDetail() {
             <h1 
               className="text-2xl md:text-3xl font-bold text-teal-900"
               style={{ 
+                fontFamily: "'Jameel Noori Nastaleeq', serif",
                 textAlign: 'right',
                 width: 'calc(100% - 40px)',
-                direction: 'rtl'
+                direction: 'rtl',
+                lineHeight: '1.6'
               }}
             >
               {article.title}
             </h1>
           </div>
 
-          {/* Article Content - Right aligned for Urdu */}
+          {/* Article Content with Jameel Noori Nastaleeq font */}
           <div 
             className="text-gray-800 mb-8 w-full article-content no-copy"
             style={{ 
-              lineHeight: '1.8',
-              fontSize: '1.1rem',
-              wordBreak: 'break-word',
-              whiteSpace: 'pre-line',
+              fontFamily: "'Jameel Noori Nastaleeq', serif",
+              fontSize: '1.3rem',
+              lineHeight: '2.2',
               textAlign: 'right',
-              direction: 'rtl'
+              direction: 'rtl',
+              wordBreak: 'break-word',
+              whiteSpace: 'pre-line'
             }}
             dangerouslySetInnerHTML={{ __html: article.content }} 
           />
 
-          {/* Article Metadata - Mixed alignment */}
+          {/* Article Metadata */}
           <div className="border-t border-teal-200 pt-6">
             <div className="flex flex-col sm:flex-row justify-between gap-4">
               <div className="flex flex-wrap items-center gap-4 text-sm text-teal-700">
