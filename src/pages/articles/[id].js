@@ -6,7 +6,7 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { FaHeart, FaRegHeart, FaEye, FaCalendarAlt, FaUser, FaYoutube } from 'react-icons/fa';
 
-// Enhanced font styling with Urdu support
+// Enhanced font styling with perfect Urdu support
 const fontFaceCSS = `
   @font-face {
     font-family: 'Jameel Noori Nastaleeq';
@@ -17,32 +17,27 @@ const fontFaceCSS = `
   }
   
   .urdu-content {
-    font-family: 'Noto Nastaliq Urdu', 'Amiri', 'Jameel Noori Nastaleeq', serif;
+    font-family: 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', 'Amiri', serif;
     direction: rtl;
     text-align: right;
-    line-height: 1.8;
-    word-spacing: 0.1rem;
+    line-height: 2.5;
+    word-spacing: 0.3rem;
     unicode-bidi: plaintext;
-    font-size: 1.4rem;
-  }
-
-  /* Special handling for words with ٸ character */
-  .urdu-content .special-char {
-    font-family: 'Noto Nastaliq Urdu', 'Amiri', serif;
   }
 
   /* Right-aligned headings */
   .urdu-content .heading {
     font-weight: bold;
-    font-size: 1.6rem;
-    margin: 1.5rem 0 1rem;
+    font-size: 1.5em;
+    margin: 2rem 0 1rem;
     text-align: right;
   }
 
-  /* Regular paragraphs */
+  /* Justified regular text */
   .urdu-content p {
-    margin-bottom: 1rem;
-    text-align: right;
+    margin-bottom: 1.5rem;
+    text-align: justify;
+    text-justify: inter-word;
   }
 `;
 
@@ -58,23 +53,19 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Function to process content with special handling
+// Function to process content with asterisk-based headings
 const processContent = (content) => {
   if (!content) return '';
   
-  // Process special characters first
-  const withSpecialChars = content.replace(
-    /([^\s]*ٸ[^\s]*)/g, 
-    '<span class="special-char">$1</span>'
-  );
-  
-  // Then process asterisk-based headings
-  const parts = withSpecialChars.split(/\*([^*]+)\*/g);
+  // Split content by asterisk patterns
+  const parts = content.split(/\*([^*]+)\*/g);
   
   return parts.map((part, index) => {
     if (index % 2 === 1) {
+      // Text between asterisks becomes right-aligned heading
       return `<div class="heading">${part}</div>`;
     } else if (part.trim()) {
+      // Regular justified paragraphs
       return `<p>${part}</p>`;
     }
     return '';
@@ -123,13 +114,60 @@ export default function ArticleDetail() {
     fetchArticle();
   }, [router.isReady, id]);
 
-  // ... [keep other useEffect hooks unchanged] ...
+  useEffect(() => {
+    const handleCopy = (e) => {
+      e.preventDefault();
+      alert('Copying content is not allowed');
+    };
+
+    const articleContent = document.querySelector('.article-content');
+    if (articleContent) {
+      articleContent.addEventListener('copy', handleCopy);
+      articleContent.addEventListener('cut', handleCopy);
+      articleContent.addEventListener('contextmenu', (e) => e.preventDefault());
+    }
+
+    return () => {
+      if (articleContent) {
+        articleContent.removeEventListener('copy', handleCopy);
+        articleContent.removeEventListener('cut', handleCopy);
+        articleContent.removeEventListener('contextmenu', (e) => e.preventDefault());
+      }
+    };
+  }, [article]);
+
+  const handleLikeArticle = async () => {
+    if (!currentUser) return router.push('/login');
+    try {
+      setIsLiking(true);
+      await api.post('like/', { article_id: article.id });
+      const updatedArticle = await api.get(`articles/${id}/`);
+      setArticle(updatedArticle.data);
+      setProcessedContent(processContent(updatedArticle.data.content));
+    } catch (err) {
+      setError('Failed to like article');
+    } finally {
+      setIsLiking(false);
+    }
+  };
+
+  if (isLoading) return (
+    <div className="min-h-screen bg-gradient-to-br from-teal-100 to-coral-100 flex items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-teal-600"></div>
+    </div>
+  );
+
+  if (error || !article) return (
+    <div className="min-h-screen bg-gradient-to-br from-teal-100 to-coral-100 flex flex-col items-center justify-center p-4">
+      <p className="text-lg text-teal-800 mb-4">{error || 'Article not found'}</p>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-teal-100 to-coral-100">
       <Head>
-        <title>{article?.title} | Jutt Clans</title>
-        <meta name="description" content={article?.meta_description || article?.title} />
+        <title>{article.title} | Jutt Clans</title>
+        <meta name="description" content={article.meta_description || article.title} />
         <link rel="icon" href="/jutt-icon.png" />
         <link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu&family=Amiri&display=swap" rel="stylesheet" />
       </Head>
@@ -139,7 +177,7 @@ export default function ArticleDetail() {
       <div className="w-full bg-white">
         <div className="container mx-auto px-4 md:px-6 py-8">
           {/* Article Header */}
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex justify-between items-center mb-8">
             <a 
               href="https://www.youtube.com/@Tahir_Farz" 
               target="_blank" 
@@ -149,32 +187,82 @@ export default function ArticleDetail() {
               <FaYoutube className="text-2xl md:text-3xl" />
             </a>
             <h1 className="text-2xl md:text-3xl font-bold text-teal-900 urdu-content">
-              {article?.title}
+              {article.title}
             </h1>
           </div>
 
           {/* Processed Article Content */}
           <div 
             className="text-gray-800 mb-8 article-content no-copy urdu-content"
-            style={{ padding: '0 0.5rem' }}
+            style={{ 
+              fontSize: 'clamp(1.2rem, 3vw, 1.4rem)',
+              padding: '0 0.5rem'
+            }}
             dangerouslySetInnerHTML={{ __html: processedContent }} 
           />
 
           {/* Article Metadata (LTR) */}
           <div className="border-t border-teal-200 pt-6" style={{ direction: 'ltr' }}>
-            {/* ... [keep metadata section unchanged] ... */}
+            <div className="flex flex-col sm:flex-row justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-4 text-sm text-teal-700">
+                <div className="flex items-center">
+                  <FaUser className="mr-2" />
+                  <span>Posted by {article.author.username}</span>
+                </div>
+                <div className="flex items-center">
+                  <FaCalendarAlt className="mr-2" />
+                  <span>
+                    {new Date(article.created_at).toLocaleDateString('en-US', { 
+                      year: 'numeric', 
+                      month: 'long', 
+                      day: 'numeric' 
+                    })}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 text-sm text-teal-700">
+                <div className="flex items-center">
+                  <FaEye className="mr-2" />
+                  <span>{article.views} views</span>
+                </div>
+                
+                <button
+                  onClick={handleLikeArticle}
+                  disabled={isLiking}
+                  className={`flex items-center ${currentUser ? 'hover:text-red-500 cursor-pointer' : 'cursor-default'} ${
+                    article.is_liked ? 'text-red-500' : 'text-teal-700'
+                  } transition-colors`}
+                >
+                  {currentUser && article.is_liked ? (
+                    <FaHeart className="mr-2" />
+                  ) : (
+                    <FaRegHeart className="mr-2" />
+                  )}
+                  <span>{article.likes} {article.is_liked && currentUser ? 'liked' : 'likes'}</span>
+                  {isLiking && <span className="ml-1">...</span>}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Comment Section (LTR) */}
       <div className="w-full bg-white border-t border-teal-100" style={{ direction: 'ltr' }}>
-        {/* ... [keep comment section unchanged] ... */}
+        <div className="container mx-auto px-4 md:px-6 py-8">
+          <h2 className="text-xl font-semibold text-teal-900 mb-4">Comments</h2>
+          <CommentSection 
+            articleId={article.id} 
+            api={api} 
+            currentUser={currentUser}
+          />
+        </div>
       </div>
 
       {/* Footer (LTR) */}
       <footer className="bg-teal-800 text-white py-6" style={{ direction: 'ltr' }}>
-       <div className="container mx-auto px-4 text-center">
+        <div className="container mx-auto px-4 text-center">
           <p className="text-sm text-teal-300">
             © {new Date().getFullYear()} Jatt Clans. All rights reserved.
           </p>
