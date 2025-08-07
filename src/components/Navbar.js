@@ -102,7 +102,7 @@ export default function Navbar({ currentPage }) {
                 }`}
               >
                 <FaPhone className="mr-1" />
-                Contact
+                Contact Us
               </Link>
 
               {user ? (
