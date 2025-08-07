@@ -39,6 +39,7 @@ export default function AdminDashboard() {
   const [categoryForm, setCategoryForm] = useState({ name: '' });
   const [isEditing, setIsEditing] = useState({ article: false, category: false });
   const [currentId, setCurrentId] = useState({ article: null, category: null });
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Auth check
   useEffect(() => {
@@ -79,12 +80,10 @@ export default function AdminDashboard() {
     try {
       const response = await fetch(url, config);
 
-      // Handle empty responses (like for DELETE requests)
       if (response.status === 204) {
         return { success: true };
       }
 
-      // Check if response is JSON
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
         const text = await response.text();
@@ -117,17 +116,13 @@ export default function AdminDashboard() {
     async (endpoint, params = {}) => {
       setIsLoading(true);
       setError('');
-
       try {
         const queryString = new URLSearchParams(params).toString();
         const url = `${API_URL}/${endpoint}/${queryString ? `?${queryString}` : ''}`;
-
         const result = await makeRequest(url);
-
         if (!result.success) {
           throw new Error(result.error);
         }
-
         return Array.isArray(result.data) ? result.data : result.data.results || [];
       } catch (err) {
         setError(err.message);
@@ -200,7 +195,6 @@ export default function AdminDashboard() {
       const id = currentId[type];
       const endpoint = type === 'article' ? 'articles' : 'categories';
       const url = `${API_URL}/${endpoint}/${isEdit ? `${id}/` : ''}`;
-
       let body;
       let isFormData = false;
 
@@ -338,24 +332,34 @@ export default function AdminDashboard() {
   };
 
   // UI Components
-  const StatsCard = ({ title, value }) => (
-    <div className="bg-white rounded-lg shadow p-4 flex-1 min-w-[120px]">
-      <h3 className="text-sm font-medium text-gray-700">{title}</h3>
-      <p className="text-2xl font-bold text-blue-600 mt-1">{value}</p>
+  const StatsCard = ({ title, value, icon, color }) => (
+    <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${color} p-6 text-white shadow-2xl transition-all duration-300 hover:scale-105 hover:shadow-3xl`}>
+      <div className="absolute -top-4 -right-4 opacity-20">
+        <div className="text-6xl">{icon}</div>
+      </div>
+      <div className="relative z-10">
+        <p className="text-sm font-medium opacity-90">{title}</p>
+        <p className="text-3xl font-bold mt-2">{value}</p>
+      </div>
+      <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent"></div>
     </div>
   );
 
-  const TabButton = ({ tab }) => (
+  const TabButton = ({ tab, icon }) => (
     <button
       type="button"
-      onClick={() => setActiveTab(tab)}
-      className={`px-4 py-2 text-sm font-medium ${
+      onClick={() => {
+        setActiveTab(tab);
+        setIsSidebarOpen(false);
+      }}
+      className={`flex items-center space-x-3 w-full px-4 py-3 text-left rounded-xl transition-all duration-300 ${
         activeTab === tab
-          ? 'border-b-2 border-blue-500 text-blue-600'
-          : 'text-gray-700 hover:text-blue-600'
+          ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg transform scale-105'
+          : 'text-gray-600 hover:bg-gray-100 hover:text-blue-600'
       }`}
     >
-      {tab.charAt(0).toUpperCase() + tab.slice(1)}
+      <span className="text-xl">{icon}</span>
+      <span className="font-medium capitalize">{tab}</span>
     </button>
   );
 
@@ -367,421 +371,630 @@ export default function AdminDashboard() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
         <Navbar />
+        
+        <div className="flex">
+          {/* Mobile Sidebar Overlay */}
+          {isSidebarOpen && (
+            <div 
+              className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+              onClick={() => setIsSidebarOpen(false)}
+            />
+          )}
 
-        <main className="container mx-auto px-4 py-6">
-          <h1 className="text-2xl md:text-3xl font-bold mb-6 text-gray-800">Admin Dashboard</h1>
+          {/* Sidebar */}
+          <div className={`fixed left-0 top-0 h-full w-80 bg-white shadow-2xl transform transition-transform duration-300 z-50 lg:relative lg:translate-x-0 ${
+            isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}>
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
+                    <span className="text-white font-bold text-lg">⚡</span>
+                  </div>
+                  <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                    Admin Panel
+                  </h1>
+                </div>
+                <button 
+                  onClick={() => setIsSidebarOpen(false)}
+                  className="lg:hidden p-2 hover:bg-gray-100 rounded-lg"
+                >
+                  <span className="text-gray-500">✕</span>
+                </button>
+              </div>
+            </div>
 
-          {/* Stats Section */}
-          <div className="flex flex-wrap gap-4 mb-6 overflow-x-auto pb-2">
-            <StatsCard title="Total Articles" value={stats.totalArticles} />
-            <StatsCard title="Total Users" value={stats.totalUsers} />
-            <StatsCard title="Total Comments" value={stats.totalComments} />
-            <StatsCard title="Total Categories" value={stats.totalCategories} />
+            <div className="p-6 space-y-2">
+              <TabButton tab="articles" icon="📰" />
+              <TabButton tab="categories" icon="🏷️" />
+              <TabButton tab="users" icon="👥" />
+              <TabButton tab="comments" icon="💬" />
+            </div>
           </div>
 
-          {/* Tabs Navigation */}
-          <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
-            {['articles', 'categories', 'users', 'comments'].map((tab) => (
-              <TabButton key={tab} tab={tab} />
-            ))}
-          </div>
-
-          {/* Status Messages */}
-          {error && (
-            <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
-              <p className="text-red-700">{error}</p>
-            </div>
-          )}
-          {success && (
-            <div className="bg-green-50 border-l-4 border-green-500 p-4 mb-6">
-              <p className="text-green-700">{success}</p>
-            </div>
-          )}
-
-          {/* Articles Tab */}
-          {activeTab === 'articles' && (
-            <>
-              <div className="bg-white rounded-lg shadow p-4 mb-6">
-                <h2 className="text-xl font-semibold mb-4 text-gray-800">
-                  {isEditing.article ? 'Edit Article' : 'Create Article'}
-                </h2>
-                <form onSubmit={(e) => handleSubmit('article', e)}>
-                  <div className="grid gap-4 mb-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
-                      <input
-                        type="text"
-                        value={articleForm.title}
-                        onChange={(e) => setArticleForm({ ...articleForm, title: e.target.value })}
-                        className="w-full p-2 border border-gray-300 rounded-md text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                      <select
-                        value={articleForm.category_id}
-                        onChange={(e) => setArticleForm({ ...articleForm, category_id: e.target.value })}
-                        className="w-full p-2 border border-gray-300 rounded-md text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        required
-                      >
-                        <option value="">Select category</option>
-                        {categories.map((cat) => (
-                          <option key={cat.id} value={cat.id}>
-                            {cat.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Content</label>
-                      <textarea
-                        value={articleForm.content}
-                        onChange={(e) => setArticleForm({ ...articleForm, content: e.target.value })}
-                        className="w-full p-2 border border-gray-300 rounded-md min-h-[200px] text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Thumbnail</label>
-                      <input
-                        type="file"
-                        onChange={(e) => setArticleForm({ ...articleForm, thumbnail: e.target.files[0] })}
-                        className="w-full p-2 border border-gray-300 rounded-md text-gray-900 bg-white file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                        accept="image/*"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    {isEditing.article && (
-                      <button
-                        type="button"
-                        onClick={() => resetForm('article')}
-                        className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors"
-                      >
-                        Cancel
-                      </button>
-                    )}
+          {/* Main Content */}
+          <div className="flex-1 min-h-screen">
+            {/* Header */}
+            <div className="bg-white/80 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-30">
+              <div className="px-4 lg:px-8 py-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
                     <button
-                      type="submit"
-                      disabled={isLoading}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed"
+                      onClick={() => setIsSidebarOpen(true)}
+                      className="lg:hidden p-2 hover:bg-gray-100 rounded-lg"
                     >
-                      {isLoading ? 'Saving...' : isEditing.article ? 'Update' : 'Create'}
+                      <span className="text-gray-600 text-xl">☰</span>
                     </button>
-                  </div>
-                </form>
-              </div>
-
-              {/* Articles List */}
-              <div className="bg-white rounded-lg shadow p-4">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
-                  <h2 className="text-xl font-semibold text-gray-800">Articles</h2>
-                  <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                    <input
-                      type="text"
-                      placeholder="Search articles..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="p-2 border border-gray-300 rounded-md text-sm w-full text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                    <select
-                      value={selectedCategory}
-                      onChange={(e) => setSelectedCategory(e.target.value)}
-                      className="p-2 border border-gray-300 rounded-md text-sm w-full sm:w-auto text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="">All Categories</option>
-                      {categories.map((cat) => (
-                        <option key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </option>
-                      ))}
-                    </select>
+                    <div>
+                      <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                        Dashboard Overview
+                      </h1>
+                      <p className="text-gray-600 text-sm lg:text-base">Manage your content, users, and system settings</p>
+                    </div>
                   </div>
                 </div>
-
-                {isLoading ? (
-                  <div className="text-center py-8 text-gray-700">Loading...</div>
-                ) : articles.length === 0 ? (
-                  <div className="text-center py-8 text-gray-600">No articles found</div>
-                ) : (
-                  <div className="space-y-4">
-                    {articles.map((article) => (
-                      <div key={article.id} className="border-b border-gray-200 pb-4 last:border-b-0">
-                        <div className="flex flex-col sm:flex-row justify-between gap-4">
-                          <div className="flex-1">
-                            <h3 className="font-medium text-gray-800">{article.title}</h3>
-                            <p className="text-sm text-gray-700 mt-1 line-clamp-2">
-                              {article.content.substring(0, 200)}...
-                            </p>
-                            <div className="flex flex-wrap gap-2 mt-2 text-xs">
-                              <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                                {article.category?.name || 'No Category'}
-                              </span>
-                              <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded">
-                                {article.views} views
-                              </span>
-                            </div>
-                          </div>
-                          <div className="flex gap-2 self-end sm:self-center">
-                            <button
-                              onClick={() => handleEdit('article', article)}
-                              className="px-3 py-1 bg-blue-100 text-blue-800 rounded-md text-sm hover:bg-blue-200 transition-colors"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => handleDelete('article', article.id)}
-                              className="px-3 py-1 bg-red-100 text-red-800 rounded-md text-sm hover:bg-red-200 transition-colors"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
-            </>
-          )}
+            </div>
 
-          {/* Categories Tab */}
-          {activeTab === 'categories' && (
-            <>
-              <div className="bg-white rounded-lg shadow p-4 mb-6">
-                <h2 className="text-xl font-semibold mb-4 text-gray-800">
-                  {isEditing.category ? 'Edit Category' : 'Create Category'}
-                </h2>
-                <form onSubmit={(e) => handleSubmit('category', e)}>
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                    <input
-                      type="text"
-                      value={categoryForm.name}
-                      onChange={(e) => setCategoryForm({ name: e.target.value })}
-                      className="w-full p-2 border border-gray-300 rounded-md text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      required
-                    />
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    {isEditing.category && (
-                      <button
-                        type="button"
-                        onClick={() => resetForm('category')}
-                        className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors"
-                      >
-                        Cancel
-                      </button>
-                    )}
-                    <button
-                      type="submit"
-                      disabled={isLoading}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed"
-                    >
-                      {isLoading ? 'Saving...' : isEditing.category ? 'Update' : 'Create'}
-                    </button>
-                  </div>
-                </form>
+            <main className="px-4 lg:px-8 py-6 lg:py-8">
+              {/* Stats Section */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 mb-8">
+                <StatsCard 
+                  title="Total Articles" 
+                  value={stats.totalArticles} 
+                  icon="📰" 
+                  color="from-blue-500 to-blue-600"
+                />
+                <StatsCard 
+                  title="Total Users" 
+                  value={stats.totalUsers} 
+                  icon="👥" 
+                  color="from-green-500 to-emerald-600"
+                />
+                <StatsCard 
+                  title="Total Comments" 
+                  value={stats.totalComments} 
+                  icon="💬" 
+                  color="from-orange-500 to-red-500"
+                />
+                <StatsCard 
+                  title="Categories" 
+                  value={stats.totalCategories} 
+                  icon="🏷️" 
+                  color="from-purple-500 to-pink-500"
+                />
               </div>
 
-              {/* Categories List */}
-              <div className="bg-white rounded-lg shadow p-4">
-                <h2 className="text-xl font-semibold mb-4 text-gray-800">Categories</h2>
-                {isLoading ? (
-                  <div className="text-center py-8 text-gray-700">Loading...</div>
-                ) : categories.length === 0 ? (
-                  <div className="text-center py-8 text-gray-600">No categories found</div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                    {categories.map((category) => (
-                      <div
-                        key={category.id}
-                        className="border border-gray-200 rounded-md p-4 hover:shadow-md transition-shadow"
-                      >
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium text-gray-800">{category.name}</span>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleEdit('category', category)}
-                              className="text-blue-600 hover:text-blue-800 text-sm"
-                            >
-                              Edit
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+              {/* Status Messages */}
+              {error && (
+                <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded-lg shadow-sm">
+                  <div className="flex items-center">
+                    <span className="text-red-500 text-xl mr-3">⚠️</span>
+                    <p className="text-red-700 font-medium">{error}</p>
                   </div>
-                )}
-              </div>
-            </>
-          )}
-
-          {/* Users Tab */}
-          {activeTab === 'users' && (
-            <div className="bg-white rounded-lg shadow p-4">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
-                <h2 className="text-xl font-semibold text-gray-800">Users</h2>
-                <div className="w-full sm:w-64">
-                  <input
-                    type="text"
-                    placeholder="Search users..."
-                    value={userSearchTerm}
-                    onChange={(e) => setUserSearchTerm(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
                 </div>
-              </div>
+              )}
 
-              {isLoading ? (
-                <div className="text-center py-8 text-gray-700">Loading...</div>
-              ) : users.length === 0 ? (
-                <div className="text-center py-8 text-gray-600">No users found</div>
-              ) : (
-                <div className="space-y-4">
-                  {users.map((user) => (
-                    <div
-                      key={user.id}
-                      className="border-b border-gray-200 pb-4 last:border-b-0 hover:bg-gray-50 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        {user.profile?.profile_picture && (
-                          <Link href={`/profile/${user.id}`} className="relative w-10 h-10">
-                            <Image
-                              src={user.profile.profile_picture}
-                              alt="Profile"
-                              fill
-                              className="rounded-full object-cover"
+              {success && (
+                <div className="bg-green-50 border-l-4 border-green-500 p-4 mb-6 rounded-lg shadow-sm">
+                  <div className="flex items-center">
+                    <span className="text-green-500 text-xl mr-3">✅</span>
+                    <p className="text-green-700 font-medium">{success}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Articles Tab */}
+              {activeTab === 'articles' && (
+                <div className="space-y-6 lg:space-y-8">
+                  {/* Article Form */}
+                  <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-gray-200">
+                      <h2 className="text-xl lg:text-2xl font-bold text-gray-800 flex items-center">
+                        <span className="mr-3">📝</span>
+                        {isEditing.article ? 'Edit Article' : 'Create New Article'}
+                      </h2>
+                      <p className="text-gray-600 mt-1">Add engaging content to your platform</p>
+                    </div>
+                    <div className="p-6">
+                      <form onSubmit={(e) => handleSubmit('article', e)}>
+                        <div className="grid gap-6">
+                          <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-2">Article Title</label>
+                            <input
+                              type="text"
+                              value={articleForm.title}
+                              onChange={(e) => setArticleForm({ ...articleForm, title: e.target.value })}
+                              className="w-full p-4 border-2 border-gray-200 rounded-xl text-gray-900 bg-white focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all duration-300"
+                              placeholder="Enter a compelling title..."
+                              required
                             />
-                          </Link>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Link
-                              href={`/profile/${user.id}`}
-                              className="font-medium hover:text-blue-600 truncate text-gray-800"
-                            >
-                              {user.username}
-                            </Link>
-                            {user.is_staff && (
-                              <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded whitespace-nowrap">
-                                Admin
-                              </span>
-                            )}
-                            {!user.is_active && (
-                              <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded whitespace-nowrap">
-                                Suspended
-                              </span>
-                            )}
                           </div>
-                          <p className="text-sm text-gray-700 truncate">{user.email}</p>
-                        </div>
-                        <div className="flex gap-2 flex-shrink-0">
-                          {!user.is_staff && (
-                            <button
-                              onClick={() => handleMakeAdmin(user.id)}
-                              className="px-3 py-1 bg-green-100 text-green-800 rounded-md text-sm hover:bg-green-200 whitespace-nowrap transition-colors"
+                          
+                          <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-2">Category</label>
+                            <select
+                              value={articleForm.category_id}
+                              onChange={(e) => setArticleForm({ ...articleForm, category_id: e.target.value })}
+                              className="w-full p-4 border-2 border-gray-200 rounded-xl text-gray-900 bg-white focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all duration-300"
+                              required
                             >
-                              Make Admin
+                              <option value="">Select category</option>
+                              {categories.map((cat) => (
+                                <option key={cat.id} value={cat.id}>
+                                  {cat.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-2">Content</label>
+                            <textarea
+                              value={articleForm.content}
+                              onChange={(e) => setArticleForm({ ...articleForm, content: e.target.value })}
+                              className="w-full p-4 border-2 border-gray-200 rounded-xl min-h-[200px] text-gray-900 bg-white focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all duration-300 resize-y"
+                              placeholder="Write your article content here..."
+                              required
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-2">Thumbnail Image</label>
+                            <input
+                              type="file"
+                              onChange={(e) => setArticleForm({ ...articleForm, thumbnail: e.target.files[0] })}
+                              className="w-full p-4 border-2 border-gray-200 rounded-xl text-gray-900 bg-white focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all duration-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                              accept="image/*"
+                            />
+                          </div>
+                        </div>
+                        
+                        <div className="flex flex-col sm:flex-row justify-end gap-3 mt-8">
+                          {isEditing.article && (
+                            <button
+                              type="button"
+                              onClick={() => resetForm('article')}
+                              className="px-6 py-3 bg-gray-500 text-white rounded-xl hover:bg-gray-600 transition-all duration-300 font-medium shadow-lg hover:shadow-xl transform hover:scale-105"
+                            >
+                              Cancel
                             </button>
                           )}
                           <button
-                            onClick={() => handleSuspendUser(user.id)}
-                            className={`px-3 py-1 rounded-md text-sm whitespace-nowrap transition-colors ${
-                              user.is_active
-                                ? 'bg-red-100 text-red-800 hover:bg-red-200'
-                                : 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
-                            }`}
+                            type="submit"
+                            disabled={isLoading}
+                            className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-lg hover:shadow-xl transform hover:scale-105"
                           >
-                            {user.is_active ? 'Suspend' : 'suspend'}
+                            {isLoading ? (
+                              <span className="flex items-center">
+                                <span className="animate-spin mr-2">⏳</span>
+                                Saving...
+                              </span>
+                            ) : (
+                              isEditing.article ? 'Update Article' : 'Create Article'
+                            )}
                           </button>
                         </div>
-                      </div>
+                      </form>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+                  </div>
 
-          {/* Comments Tab */}
-          {activeTab === 'comments' && (
-            <div className="bg-white rounded-lg shadow p-4">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
-                <h2 className="text-xl font-semibold text-gray-800">Comments</h2>
-                <div className="w-full sm:w-64">
-                  <input
-                    type="text"
-                    placeholder="Search comments..."
-                    value={commentSearchTerm}
-                    onChange={(e) => setCommentSearchTerm(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-              </div>
-
-              {isLoading ? (
-                <div className="text-center py-8 text-gray-700">Loading...</div>
-              ) : comments.length === 0 ? (
-                <div className="text-center py-8 text-gray-600">No comments found</div>
-              ) : (
-                <div className="space-y-4">
-                  {comments.map((comment) => (
-                    <div
-                      key={comment.id}
-                      className="border-b border-gray-200 pb-4 last:border-b-0 hover:bg-gray-50 transition-colors"
-                    >
-                      <div className="flex gap-3">
-                        {comment.user.profile?.profile_picture && (
-                          <Link
-                            href={`/profile/${comment.user.id}`}
-                            className="relative w-10 h-10 flex-shrink-0"
-                          >
-                            <Image
-                              src={comment.user.profile.profile_picture}
-                              alt="Profile"
-                              fill
-                              className="rounded-full object-cover"
-                            />
-                          </Link>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Link
-                              href={`/profile/${comment.user.id}`}
-                              className="font-medium hover:text-blue-600 truncate text-gray-800"
-                            >
-                              {comment.user.username}
-                            </Link>
-                            <span className="text-xs text-gray-600 whitespace-nowrap">
-                              {new Date(comment.created_at).toLocaleString()}
-                            </span>
-                          </div>
-                          <p className="text-sm mt-1 break-words text-gray-800">{comment.content}</p>
-                          <Link
-                            href={`/articles/${comment.article.id}`}
-                            className="text-xs text-blue-600 hover:underline mt-1 block truncate"
-                          >
-                            On: {comment.article.title}
-                          </Link>
+                  {/* Articles List */}
+                  <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-gray-200">
+                      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+                        <div>
+                          <h2 className="text-xl lg:text-2xl font-bold text-gray-800 flex items-center">
+                            <span className="mr-3">📚</span>
+                            Manage Articles
+                          </h2>
+                          <p className="text-gray-600 mt-1">View and manage all published articles</p>
                         </div>
-                        <button
-                          onClick={() => handleDelete('comment', comment.id)}
-                          className="self-start text-red-600 hover:text-red-800 text-sm flex-shrink-0"
-                        >
-                          Delete
-                        </button>
+                        <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+                          <input
+                            type="text"
+                            placeholder="Search articles..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="px-4 py-2 border-2 border-gray-200 rounded-xl text-sm w-full lg:w-64 text-gray-900 bg-white focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all duration-300"
+                          />
+                          <select
+                            value={selectedCategory}
+                            onChange={(e) => setSelectedCategory(e.target.value)}
+                            className="px-4 py-2 border-2 border-gray-200 rounded-xl text-sm w-full sm:w-auto text-gray-900 bg-white focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all duration-300"
+                          >
+                            <option value="">All Categories</option>
+                            {categories.map((cat) => (
+                              <option key={cat.id} value={cat.id}>
+                                {cat.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
                     </div>
-                  ))}
+                    
+                    <div className="p-6">
+                      {isLoading ? (
+                        <div className="text-center py-12">
+                          <div className="animate-spin text-4xl mb-4">⏳</div>
+                          <p className="text-gray-600 font-medium">Loading articles...</p>
+                        </div>
+                      ) : articles.length === 0 ? (
+                        <div className="text-center py-12">
+                          <div className="text-6xl mb-4">📰</div>
+                          <h3 className="text-xl font-bold text-gray-800 mb-2">No articles found</h3>
+                          <p className="text-gray-600">Create your first article to get started!</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {articles.map((article) => (
+                            <div key={article.id} className="border-2 border-gray-100 rounded-2xl p-6 hover:shadow-lg hover:border-blue-200 transition-all duration-300 bg-gradient-to-r from-white to-gray-50">
+                              <div className="flex flex-col lg:flex-row justify-between gap-4">
+                                <div className="flex-1 space-y-3">
+                                  <h3 className="font-bold text-lg lg:text-xl text-gray-800 leading-tight">{article.title}</h3>
+                                  <p className="text-gray-700 leading-relaxed line-clamp-3">
+                                    {article.content.substring(0, 200)}...
+                                  </p>
+                                  <div className="flex flex-wrap gap-2">
+                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                      🏷️ {article.category?.name || 'No Category'}
+                                    </span>
+                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                      👁️ {article.views} views
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex flex-col sm:flex-row gap-2 self-end lg:self-center">
+                                  <button
+                                    onClick={() => handleEdit('article', article)}
+                                    className="px-4 py-2 bg-blue-100 text-blue-800 rounded-xl text-sm font-medium hover:bg-blue-200 transition-all duration-300 transform hover:scale-105"
+                                  >
+                                    ✏️ Edit
+                                  </button>
+                                  <button
+                                    onClick={() => handleDelete('article', article.id)}
+                                    className="px-4 py-2 bg-red-100 text-red-800 rounded-xl text-sm font-medium hover:bg-red-200 transition-all duration-300 transform hover:scale-105"
+                                  >
+                                    🗑️ Delete
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
-            </div>
-          )}
-        </main>
+
+              {/* Categories Tab */}
+              {activeTab === 'categories' && (
+                <div className="space-y-6 lg:space-y-8">
+                  {/* Category Form */}
+                  <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
+                    <div className="bg-gradient-to-r from-purple-50 to-pink-50 px-6 py-4 border-b border-gray-200">
+                      <h2 className="text-xl lg:text-2xl font-bold text-gray-800 flex items-center">
+                        <span className="mr-3">🏷️</span>
+                        {isEditing.category ? 'Edit Category' : 'Create New Category'}
+                      </h2>
+                      <p className="text-gray-600 mt-1">Organize your content with categories</p>
+                    </div>
+                    <div className="p-6">
+                      <form onSubmit={(e) => handleSubmit('category', e)}>
+                        <div className="mb-6">
+                          <label className="block text-sm font-bold text-gray-700 mb-2">Category Name</label>
+                          <input
+                            type="text"
+                            value={categoryForm.name}
+                            onChange={(e) => setCategoryForm({ name: e.target.value })}
+                            className="w-full p-4 border-2 border-gray-200 rounded-xl text-gray-900 bg-white focus:ring-4 focus:ring-purple-100 focus:border-purple-500 transition-all duration-300"
+                            placeholder="Enter category name..."
+                            required
+                          />
+                        </div>
+                        
+                        <div className="flex flex-col sm:flex-row justify-end gap-3">
+                          {isEditing.category && (
+                            <button
+                              type="button"
+                              onClick={() => resetForm('category')}
+                              className="px-6 py-3 bg-gray-500 text-white rounded-xl hover:bg-gray-600 transition-all duration-300 font-medium shadow-lg hover:shadow-xl transform hover:scale-105"
+                            >
+                              Cancel
+                            </button>
+                          )}
+                          <button
+                            type="submit"
+                            disabled={isLoading}
+                            className="px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-lg hover:shadow-xl transform hover:scale-105"
+                          >
+                            {isLoading ? (
+                              <span className="flex items-center">
+                                <span className="animate-spin mr-2">⏳</span>
+                                Saving...
+                              </span>
+                            ) : (
+                              isEditing.category ? 'Update Category' : 'Create Category'
+                            )}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+
+                  {/* Categories List */}
+                  <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
+                    <div className="bg-gradient-to-r from-purple-50 to-pink-50 px-6 py-4 border-b border-gray-200">
+                      <h2 className="text-xl lg:text-2xl font-bold text-gray-800 flex items-center">
+                        <span className="mr-3">📋</span>
+                        Manage Categories
+                      </h2>
+                      <p className="text-gray-600 mt-1">View and manage content categories</p>
+                    </div>
+                    
+                    <div className="p-6">
+                      {isLoading ? (
+                        <div className="text-center py-12">
+                          <div className="animate-spin text-4xl mb-4">⏳</div>
+                          <p className="text-gray-600 font-medium">Loading categories...</p>
+                        </div>
+                      ) : categories.length === 0 ? (
+                        <div className="text-center py-12">
+                          <div className="text-6xl mb-4">🏷️</div>
+                          <h3 className="text-xl font-bold text-gray-800 mb-2">No categories found</h3>
+                          <p className="text-gray-600">Create your first category to organize content!</p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {categories.map((category) => (
+                            <div
+                              key={category.id}
+                              className="border-2 border-gray-100 rounded-2xl p-6 hover:shadow-lg hover:border-purple-200 transition-all duration-300 bg-gradient-to-br from-white to-purple-50"
+                            >
+                              <div className="flex justify-between items-center">
+                                <div className="flex items-center space-x-3">
+                                  <span className="text-2xl">🏷️</span>
+                                  <span className="font-bold text-gray-800 text-lg">{category.name}</span>
+                                </div>
+                                <button
+                                  onClick={() => handleEdit('category', category)}
+                                  className="px-3 py-1 bg-purple-100 text-purple-800 rounded-lg text-sm font-medium hover:bg-purple-200 transition-all duration-300 transform hover:scale-105"
+                                >
+                                  ✏️ Edit
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Users Tab */}
+              {activeTab === 'users' && (
+                <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
+                  <div className="bg-gradient-to-r from-green-50 to-emerald-50 px-6 py-4 border-b border-gray-200">
+                    <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+                      <div>
+                        <h2 className="text-xl lg:text-2xl font-bold text-gray-800 flex items-center">
+                          <span className="mr-3">👥</span>
+                          Manage Users
+                        </h2>
+                        <p className="text-gray-600 mt-1">View and manage platform users</p>
+                      </div>
+                      <div className="w-full lg:w-64">
+                        <input
+                          type="text"
+                          placeholder="Search users..."
+                          value={userSearchTerm}
+                          onChange={(e) => setUserSearchTerm(e.target.value)}
+                          className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl text-sm text-gray-900 bg-white focus:ring-4 focus:ring-green-100 focus:border-green-500 transition-all duration-300"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="p-6">
+                    {isLoading ? (
+                      <div className="text-center py-12">
+                        <div className="animate-spin text-4xl mb-4">⏳</div>
+                        <p className="text-gray-600 font-medium">Loading users...</p>
+                      </div>
+                    ) : users.length === 0 ? (
+                      <div className="text-center py-12">
+                        <div className="text-6xl mb-4">👥</div>
+                        <h3 className="text-xl font-bold text-gray-800 mb-2">No users found</h3>
+                        <p className="text-gray-600">No users match your search criteria</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {users.map((user) => (
+                          <div
+                            key={user.id}
+                            className="border-2 border-gray-100 rounded-2xl p-6 hover:shadow-lg hover:border-green-200 transition-all duration-300 bg-gradient-to-r from-white to-green-50"
+                          >
+                            <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4">
+                              <div className="flex items-center space-x-4 flex-1">
+                                {user.profile?.profile_picture ? (
+                                  <Link href={`/profile/${user.id}`} className="relative w-12 h-12 flex-shrink-0">
+                                    <Image
+                                      src={user.profile.profile_picture || "/placeholder.svg"}
+                                      alt="Profile"
+                                      fill
+                                      className="rounded-full object-cover shadow-lg"
+                                    />
+                                  </Link>
+                                ) : (
+                                  <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                                    {user.username.charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                                
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                                    <Link
+                                      href={`/profile/${user.id}`}
+                                      className="font-bold text-lg hover:text-green-600 truncate text-gray-800 transition-colors duration-300"
+                                    >
+                                      {user.username}
+                                    </Link>
+                                    {user.is_staff && (
+                                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                        👑 Admin
+                                      </span>
+                                    )}
+                                    {!user.is_active && (
+                                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                        🚫 Suspended
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-gray-600 truncate">{user.email}</p>
+                                </div>
+                              </div>
+                              
+                              <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
+                                {!user.is_staff && (
+                                  <button
+                                    onClick={() => handleMakeAdmin(user.id)}
+                                    className="px-4 py-2 bg-green-100 text-green-800 rounded-xl text-sm font-medium hover:bg-green-200 transition-all duration-300 transform hover:scale-105"
+                                  >
+                                    👑 Make Admin
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => handleSuspendUser(user.id)}
+                                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 transform hover:scale-105 ${
+                                    user.is_active
+                                      ? 'bg-red-100 text-red-800 hover:bg-red-200'
+                                      : 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
+                                  }`}
+                                >
+                                  {user.is_active ? '🚫 Suspend' : '✅ Activate'}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Comments Tab */}
+              {activeTab === 'comments' && (
+                <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
+                  <div className="bg-gradient-to-r from-orange-50 to-red-50 px-6 py-4 border-b border-gray-200">
+                    <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+                      <div>
+                        <h2 className="text-xl lg:text-2xl font-bold text-gray-800 flex items-center">
+                          <span className="mr-3">💬</span>
+                          Manage Comments
+                        </h2>
+                        <p className="text-gray-600 mt-1">View and moderate user comments</p>
+                      </div>
+                      <div className="w-full lg:w-64">
+                        <input
+                          type="text"
+                          placeholder="Search comments..."
+                          value={commentSearchTerm}
+                          onChange={(e) => setCommentSearchTerm(e.target.value)}
+                          className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl text-sm text-gray-900 bg-white focus:ring-4 focus:ring-orange-100 focus:border-orange-500 transition-all duration-300"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="p-6">
+                    {isLoading ? (
+                      <div className="text-center py-12">
+                        <div className="animate-spin text-4xl mb-4">⏳</div>
+                        <p className="text-gray-600 font-medium">Loading comments...</p>
+                      </div>
+                    ) : comments.length === 0 ? (
+                      <div className="text-center py-12">
+                        <div className="text-6xl mb-4">💬</div>
+                        <h3 className="text-xl font-bold text-gray-800 mb-2">No comments found</h3>
+                        <p className="text-gray-600">No comments match your search criteria</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {comments.map((comment) => (
+                          <div
+                            key={comment.id}
+                            className="border-2 border-gray-100 rounded-2xl p-6 hover:shadow-lg hover:border-orange-200 transition-all duration-300 bg-gradient-to-r from-white to-orange-50"
+                          >
+                            <div className="flex gap-4">
+                              <div className="flex-shrink-0">
+                                {comment.user.profile?.profile_picture ? (
+                                  <Link
+                                    href={`/profile/${comment.user.id}`}
+                                    className="relative w-12 h-12"
+                                  >
+                                    <Image
+                                      src={comment.user.profile.profile_picture || "/placeholder.svg"}
+                                      alt="Profile"
+                                      fill
+                                      className="rounded-full object-cover shadow-lg"
+                                    />
+                                  </Link>
+                                ) : (
+                                  <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                                    {comment.user.username.charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                              </div>
+                              
+                              <div className="flex-1 min-w-0">
+                                <div className="flex flex-wrap items-center gap-2 mb-2">
+                                  <Link
+                                    href={`/profile/${comment.user.id}`}
+                                    className="font-bold hover:text-orange-600 truncate text-gray-800 transition-colors duration-300"
+                                  >
+                                    {comment.user.username}
+                                  </Link>
+                                  <span className="text-gray-400">•</span>
+                                  <span className="text-sm text-gray-500">
+                                    {new Date(comment.created_at).toLocaleString()}
+                                  </span>
+                                </div>
+                                
+                                <p className="text-gray-800 mb-3 break-words leading-relaxed">{comment.content}</p>
+                                
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                                  <Link
+                                    href={`/articles/${comment.article.id}`}
+                                    className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 hover:bg-blue-200 transition-all duration-300 truncate max-w-xs"
+                                  >
+                                    📰 {comment.article.title}
+                                  </Link>
+                                  
+                                  <button
+                                    onClick={() => handleDelete('comment', comment.id)}
+                                    className="px-4 py-2 bg-red-100 text-red-800 rounded-xl text-sm font-medium hover:bg-red-200 transition-all duration-300 transform hover:scale-105"
+                                  >
+                                    🗑️ Delete
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </main>
+          </div>
+        </div>
       </div>
     </>
   );
